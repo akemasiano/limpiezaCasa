@@ -4,60 +4,108 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f8f6ff">
-    <meta name="description" content="Un bouton, un Hello World et un petit feu d'artifice. Votre premiere PWA sur iPhone.">
+    <meta name="description" content="Un ménage à votre rythme. Suivez vos tâches et mettez les compteurs en pause pendant les vacances.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Hello">
-    <title>Hello — Un petit moment de magie</title>
+    <meta name="apple-mobile-web-app-title" content="Casa">
+    <title>Casa — Le ménage à votre rythme</title>
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="stylesheet" href="./styles.css">
+    <script src="./core.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
-    <canvas id="fireworks" aria-hidden="true"></canvas>
     <div class="page">
       <header class="header">
-        <a class="brand" href="./" aria-label="Hello, accueil">
-          <span class="brand-icon" aria-hidden="true">✳</span> hello<span class="brand-dot">.</span>
-        </a>
-        <span class="badge"><span aria-hidden="true"></span> Ma première PWA</span>
+        <a class="brand" href="./" aria-label="Casa, accueil"><span aria-hidden="true">✳</span> casa.</a>
+        <span class="badge">Votre maison, votre rythme</span>
       </header>
-
       <main>
-        <section class="card" aria-labelledby="title">
-          <div class="illustration" aria-hidden="true">
-            <span class="orbit orbit-one"></span>
-            <span class="orbit orbit-two"></span>
-            <span class="spark spark-one">✦</span>
-            <span class="spark spark-two">✧</span>
-            <span class="spark spark-three">✦</span>
-            <span class="magic">✳</span>
+        <div id="storage-error" class="notice error" role="alert" hidden></div>
+        <section class="welcome" aria-labelledby="title">
+          <div>
+            <p class="eyebrow" id="today-label"></p>
+            <h1 id="title">Un peu de ménage.<br><span>Beaucoup de sérénité.</span></h1>
+            <p class="intro">Une maison agréable, sans la charge mentale.</p>
           </div>
-          <p class="eyebrow">LES GRANDES IDÉES COMMENCENT PAR UN…</p>
-          <h1 id="title">Petit clic.<br><span>Grand sourire.</span></h1>
-          <p class="intro">Un bouton, une surprise et un peu de magie.<br>À vous de jouer.</p>
-          <button class="hello-button" id="hello-button" type="button">
-            Faire apparaître la magie <span aria-hidden="true">↗</span>
-          </button>
-          <div class="message-slot" role="status" aria-live="polite" aria-atomic="true">
-            <p id="message" class="message" hidden>Hello World ! <span aria-hidden="true">🎉</span></p>
-          </div>
-          <p class="hint" id="hint">Promis, vous pouvez recommencer.</p>
+          <button type="button" class="primary" id="add-task">+ Ajouter une tâche</button>
         </section>
-
-        <aside class="install-note" aria-label="Installation sur iPhone">
-          <span class="phone-icon" aria-hidden="true">▯</span>
-          <p><strong>Une petite place sur votre iPhone ?</strong><br>
-            Dans Safari, touchez <strong>Partager</strong> puis <strong>Sur l’écran d’accueil</strong>.</p>
+        <section class="stats" aria-label="Résumé du ménage">
+          <div><strong id="stat-due">0</strong><span>à faire</span></div>
+          <div><strong id="stat-ok">0</strong><span>à jour</span></div>
+          <div><strong id="stat-total">0</strong><span>tâches au total</span></div>
+        </section>
+        <section class="vacation card" aria-labelledby="vacation-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LE MÉNAGE AUSSI PREND DES VACANCES</p>
+              <h2 id="vacation-title">Vous partez ? Mettez sur pause.</h2>
+              <p id="vacation-status">Les jours d’absence ne comptent pas dans vos fréquences.</p>
+            </div>
+            <span class="vacation-icon" aria-hidden="true">☀</span>
+          </div>
+          <div class="actions">
+            <button class="primary" type="button" id="toggle-vacation">Je pars aujourd’hui</button>
+            <button class="secondary" type="button" id="plan-vacation">Programmer une absence</button>
+          </div>
+          <p class="hint">Le jour du départ est en pause ; le jour du retour compte à nouveau.</p>
+          <details id="vacation-details">
+            <summary>Mes absences <span id="vacation-count">(0)</span></summary>
+            <ul id="vacation-list" class="vacation-list"></ul>
+          </details>
+        </section>
+        <section class="tasks-section" aria-labelledby="tasks-title">
+          <div class="section-heading tasks-heading">
+            <h2 id="tasks-title">Ma maison</h2>
+            <div class="filters">
+              <label><span class="sr-only">Filtrer par pièce</span><select id="room-filter"><option value="">Toutes les pièces</option></select></label>
+              <label><span class="sr-only">Filtrer les tâches</span><select id="status-filter"><option value="all">Toutes les tâches</option><option value="due">À faire</option><option value="ok">À jour</option></select></label>
+            </div>
+          </div>
+          <div id="task-list" class="task-list"></div>
+          <div id="empty-state" class="empty card" hidden>
+            <h3 id="empty-title">Bienvenue chez vous.</h3>
+            <p id="empty-text">Ajoutez votre première tâche ou démarrez avec quelques idées modifiables.</p>
+            <button type="button" class="secondary" id="add-examples">Ajouter des exemples</button>
+          </div>
+        </section>
+        <aside class="install-note">
+          <strong>Votre maison, même sans connexion.</strong>
+          Sur iPhone : Safari → Partager → Sur l’écran d’accueil.
+          Sur Android : menu du navigateur → Installer l’application.
         </aside>
+        <noscript><p class="notice error">Activez JavaScript pour utiliser le suivi du ménage.</p></noscript>
       </main>
-
       <footer>
-        <span>Fait pour le plaisir de créer.</span>
-        <span class="offline-status" id="offline-status" role="status">Préparation du mode hors ligne…</span>
+        <span>Données sur cet appareil uniquement · Sans compte</span>
+        <span id="offline-status" role="status">Préparation du mode hors ligne…</span>
       </footer>
     </div>
+    <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+    <dialog id="task-dialog" aria-labelledby="task-dialog-title">
+      <form id="task-form">
+        <div class="section-heading"><h2 id="task-dialog-title">Nouvelle tâche</h2><button type="button" class="icon-button" data-close aria-label="Fermer">×</button></div>
+        <p class="form-feedback notice" role="status" hidden></p>
+        <label>Que faut-il nettoyer ?<input id="task-name" name="name" required maxlength="100" placeholder="Passer l’aspirateur" autocomplete="off"></label>
+        <label>Pièce<input id="task-room" name="room" required maxlength="60" list="room-suggestions" placeholder="Salon" autocomplete="off"></label>
+        <datalist id="room-suggestions"></datalist>
+        <label>Tous les combien de jours de présence ?<input id="task-frequency" name="frequency" type="number" min="1" max="3650" step="1" value="7" required inputmode="numeric"></label>
+        <label>Dernier ménage <span class="label-hint">(facultatif)</span><input id="task-last-done" name="lastDone" type="date"></label>
+        <p class="hint">Sans date, la tâche sera à faire dès maintenant. Les jours d’absence sont déduits automatiquement.</p>
+        <div class="dialog-actions"><button type="button" class="danger" id="delete-task" hidden>Supprimer</button><button type="submit" class="primary">Enregistrer</button></div>
+      </form>
+    </dialog>
+    <dialog id="vacation-dialog" aria-labelledby="vacation-dialog-title">
+      <form id="vacation-form">
+        <div class="section-heading"><h2 id="vacation-dialog-title">Programmer une absence</h2><button type="button" class="icon-button" data-close aria-label="Fermer">×</button></div>
+        <p class="form-feedback notice" role="status" hidden></p>
+        <label>Départ<input id="vacation-start" name="start" type="date" required></label>
+        <label>Retour<input id="vacation-end" name="end" type="date" required></label>
+        <p class="hint">La pause démarre à la date de départ et se termine à la date de retour, même si l’application est fermée. Les absences qui se chevauchent ne sont comptées qu’une fois.</p>
+        <button type="submit" class="primary full-width">Programmer la pause</button>
+      </form>
+    </dialog>
   </body>
 </html>

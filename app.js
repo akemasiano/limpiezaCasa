@@ -1,120 +1,296 @@
 "use strict";
 
-const button = document.querySelector("#hello-button");
-const message = document.querySelector("#message");
-const hint = document.querySelector("#hint");
-const canvas = document.querySelector("#fireworks");
-const context = canvas.getContext("2d");
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const colors = ["#9871f5", "#ffc66f", "#f18db1", "#70d7c7", "#bba4ff"];
-let particles = [];
-let animationFrame = null;
-let previousTime = null;
-let celebrationStart = null;
-let nextBurst = 0;
-let width = 0;
-let height = 0;
+const core = globalThis.CasaCore;
+const STORAGE_KEY = "casa-state-v1";
+const $ = (selector) => document.querySelector(selector);
+const taskDialog = $("#task-dialog");
+const vacationDialog = $("#vacation-dialog");
+let state = { version: 1, tasks: [], vacations: [] };
+let storageBlocked = false;
+let editingId = null;
+let notificationTimeout;
+let renderedDate;
+const dateFormatter = new Intl.DateTimeFormat("fr", { day: "numeric", month: "short", year: "numeric" });
 
-function resizeCanvas() {
-  width = window.innerWidth;
-  height = window.innerHeight;
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.round(width * ratio);
-  canvas.height = Math.round(height * ratio);
-  context?.setTransform(ratio, 0, 0, ratio, 0, 0);
+function formatDate(date) {
+  return dateFormatter.format(new Date(`${date}T12:00:00`));
 }
 
-function burst(x, y) {
-  for (let i = 0; i < 55; i += 1) {
-    const angle = (Math.PI * 2 * i) / 55;
-    const speed = 65 + Math.random() * 170;
-    particles.push({
-      x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 0,
-      duration: .8 + Math.random() * .7,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: 1.5 + Math.random() * 2,
-    });
-  }
+function storageError(error, message) {
+  console.error(message, error);
+  $("#storage-error").textContent = message;
+  $("#storage-error").hidden = false;
 }
 
-function stopFireworks() {
-  if (animationFrame !== null) cancelAnimationFrame(animationFrame);
-  animationFrame = null;
-  previousTime = null;
-  celebrationStart = null;
-  particles = [];
-  context?.clearRect(0, 0, width, height);
+try {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved !== null) state = core.validateState(JSON.parse(saved));
+} catch (error) {
+  storageBlocked = true;
+  storageError(error, "Impossible de lire vos données. Aucune donnée ne sera écrasée. Vérifiez que le stockage du navigateur est autorisé ; si le problème persiste, conservez les données du site avant toute réinitialisation.");
 }
 
-function animate(time) {
-  if (celebrationStart === null) celebrationStart = time;
-  const elapsed = time - celebrationStart;
-  const delta = previousTime === null ? 0 : Math.min((time - previousTime) / 1000, .04);
-  previousTime = time;
-  context.clearRect(0, 0, width, height);
-
-  if (elapsed >= nextBurst && nextBurst < 1500) {
-    burst(width * (.15 + Math.random() * .7), height * (.15 + Math.random() * .4));
-    nextBurst += 250;
+function save(next) {
+  if (storageBlocked) {
+    notify("Enregistrement bloqué : le stockage de cet appareil est inaccessible ou illisible.");
+    return false;
   }
-
-  particles = particles.filter((particle) => {
-    particle.life += delta;
-    if (particle.life >= particle.duration) return false;
-    particle.x += particle.vx * delta;
-    particle.y += particle.vy * delta;
-    particle.vy += 95 * delta;
-    context.globalAlpha = 1 - particle.life / particle.duration;
-    context.fillStyle = particle.color;
-    context.beginPath();
-    context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-    context.fill();
-    return true;
-  });
-  context.globalAlpha = 1;
-
-  if (particles.length > 0 || nextBurst < 1500) {
-    animationFrame = requestAnimationFrame(animate);
-  } else {
-    stopFireworks();
+  try {
+    core.validateState(next);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch (error) {
+    storageError(error, "Modification non enregistrée. Le stockage est peut-être plein ou désactivé. Vos données précédentes sont conservées.");
+    notify("Modification non enregistrée. Vérifiez le stockage disponible et les autorisations du navigateur.");
+    return false;
   }
+  state = next;
+  $("#storage-error").hidden = true;
+  render();
+  return true;
 }
 
-button.addEventListener("click", () => {
-  message.hidden = false;
-  message.classList.remove("reveal");
-  // Restart the reveal animation, including on consecutive taps.
-  void message.offsetWidth;
-  message.classList.add("reveal");
-  button.innerHTML = 'Encore un peu de magie <span aria-hidden="true">↗</span>';
-  hint.textContent = "C’est aussi simple que ça. Et ce n’est que le début.";
-  stopFireworks();
-  if (context && !reducedMotion.matches) {
-    nextBurst = 0;
-    animationFrame = requestAnimationFrame(animate);
-  }
-});
-
-window.addEventListener("resize", resizeCanvas);
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stopFireworks();
-});
-reducedMotion.addEventListener("change", () => {
-  if (reducedMotion.matches) stopFireworks();
-});
-resizeCanvas();
-
-async function prepareOfflineMode() {
-  const status = document.querySelector("#offline-status");
-  if (!("serviceWorker" in navigator)) {
-    status.textContent = "Mode hors ligne indisponible dans ce navigateur.";
+function notify(text) {
+  const feedback = document.querySelector("dialog[open] .form-feedback");
+  if (feedback) {
+    feedback.textContent = text;
+    feedback.hidden = false;
     return;
   }
-  if (!window.isSecureContext) {
-    status.textContent = "Le mode hors ligne nécessite HTTPS ou localhost.";
+  const notification = $("#notification");
+  clearTimeout(notificationTimeout);
+  notification.textContent = text;
+  notification.hidden = false;
+  notificationTimeout = setTimeout(() => { notification.hidden = true; }, 5000);
+}
+
+function makeElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+function actionButton(text, className, action, label) {
+  const button = makeElement("button", className, text);
+  button.type = "button";
+  if (label) button.setAttribute("aria-label", label);
+  button.addEventListener("click", action);
+  return button;
+}
+
+function render() {
+  const date = core.today();
+  renderedDate = date;
+  const away = state.vacations.some((vacation) => core.isAway(vacation, date));
+  $("#today-label").textContent = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  $("#task-last-done").max = date;
+  const tasks = state.tasks.map((task) => ({ task, ...core.taskStatus(task, date, state.vacations) }));
+  const due = tasks.filter((task) => task.due).length;
+  $("#stat-due").textContent = due;
+  $("#stat-ok").textContent = tasks.length - due;
+  $("#stat-total").textContent = tasks.length;
+  $("#vacation-status").textContent = away
+    ? "Mode vacances activé. Les compteurs sont en pause. Profitez, la maison peut attendre."
+    : "Les jours d’absence ne comptent pas dans vos fréquences.";
+  $(".vacation").classList.toggle("is-away", away);
+  $("#toggle-vacation").textContent = away ? "Je suis de retour" : "Je pars aujourd’hui";
+  $("#vacation-count").textContent = `(${state.vacations.length})`;
+  const vacationList = $("#vacation-list");
+  vacationList.replaceChildren();
+  if (!state.vacations.length) vacationList.append(makeElement("li", "hint", "Aucune absence pour le moment."));
+  for (const vacation of [...state.vacations].sort((a, b) => b.start.localeCompare(a.start))) {
+    const row = makeElement("li");
+    const text = vacation.end === null
+      ? `Depuis le ${formatDate(vacation.start)} · jusqu’à votre retour`
+      : `${formatDate(vacation.start)} → ${formatDate(vacation.end)}`;
+    const status = core.isAway(vacation, date) ? "En cours" : vacation.start > date ? "À venir" : "Terminée";
+    row.append(makeElement("span", "", `${text} · ${status}`));
+    row.append(actionButton("Supprimer", "text-button danger", () => {
+      if (confirm("Supprimer cette absence ? Les jours correspondants compteront à nouveau dans les tâches.")) {
+        if (save({ ...state, vacations: state.vacations.filter((item) => item.id !== vacation.id) })) notify("Absence supprimée.");
+      }
+    }, `Supprimer l’absence du ${formatDate(vacation.start)}`));
+    vacationList.append(row);
+  }
+
+  const roomFilter = $("#room-filter");
+  const selectedRoom = roomFilter.value;
+  const rooms = [...new Set(state.tasks.map((task) => task.room))].sort((a, b) => a.localeCompare(b, "fr"));
+  roomFilter.replaceChildren(new Option("Toutes les pièces", ""));
+  $("#room-suggestions").replaceChildren();
+  for (const room of rooms) {
+    roomFilter.add(new Option(room, room));
+    $("#room-suggestions").append(new Option(room, room));
+  }
+  roomFilter.value = rooms.includes(selectedRoom) ? selectedRoom : "";
+  const statusFilter = $("#status-filter").value;
+  const filtered = tasks.filter(({ task, due: taskDue }) =>
+    (!roomFilter.value || task.room === roomFilter.value) &&
+    (statusFilter === "all" || (statusFilter === "due" ? taskDue : !taskDue))
+  ).sort((a, b) => Number(b.due) - Number(a.due) || a.task.room.localeCompare(b.task.room, "fr") || a.task.name.localeCompare(b.task.name, "fr"));
+  const taskList = $("#task-list");
+  taskList.replaceChildren();
+  for (const { task, due: taskDue, elapsed, remaining } of filtered) {
+    const card = makeElement("article", "task card");
+    const top = makeElement("div", "section-heading");
+    top.append(makeElement("span", "room-label", task.room));
+    top.append(actionButton("Modifier", "text-button", () => openTask(task), `Modifier ${task.name}, ${task.room}`));
+    card.append(top, makeElement("h3", "", task.name));
+    const badge = elapsed === null ? "À commencer" : taskDue ? "À faire" : "À jour";
+    card.append(makeElement("span", `task-status ${taskDue ? "due" : "ok"}`, badge));
+    const lastDone = task.lastDone === null ? "Pas encore effectuée" : `Dernier ménage : ${formatDate(task.lastDone)}`;
+    card.append(makeElement("p", "last-done", lastDone));
+    const schedule = elapsed === null ? `Tous les ${task.frequency} jours de présence`
+      : taskDue ? `${elapsed} jour${elapsed > 1 ? "s" : ""} de présence écoulé${elapsed > 1 ? "s" : ""} · fréquence ${task.frequency} j`
+        : `Dans ${remaining} jour${remaining > 1 ? "s" : ""} de présence · fréquence ${task.frequency} j`;
+    card.append(makeElement("p", "hint", schedule));
+    const progress = makeElement("div", "progress");
+    const fill = makeElement("span");
+    fill.style.width = `${elapsed === null ? 100 : Math.min(100, elapsed / task.frequency * 100)}%`;
+    progress.append(fill);
+    progress.classList.toggle("due", taskDue);
+    card.append(progress);
+    const completedToday = task.lastDone === date;
+    const complete = actionButton(away ? "En pause pendant l’absence" : completedToday ? "Fait aujourd’hui ✓" : "C’est fait ✓", "complete-button", () => {
+      const completionDate = core.today();
+      if (state.vacations.some((vacation) => core.isAway(vacation, completionDate))) {
+        render();
+        notify("Terminez votre absence avant de valider le ménage.");
+        return;
+      }
+      if (save({ ...state, tasks: state.tasks.map((item) => item.id === task.id ? { ...item, lastDone: completionDate } : item) })) {
+        notify(`${task.name} : c’est noté !`);
+      }
+    }, `Marquer comme fait : ${task.name}, ${task.room}`);
+    complete.disabled = away || completedToday;
+    card.append(complete);
+    taskList.append(card);
+  }
+  $("#empty-state").hidden = filtered.length !== 0;
+  $("#empty-title").textContent = state.tasks.length ? "Rien à afficher ici." : "Bienvenue chez vous.";
+  $("#empty-text").textContent = state.tasks.length ? "Essayez un autre filtre, ou profitez de votre maison." : "Ajoutez votre première tâche ou démarrez avec quelques idées modifiables.";
+  $("#add-examples").hidden = state.tasks.length !== 0;
+}
+
+function openTask(task = null) {
+  editingId = task?.id ?? null;
+  $("#task-form").reset();
+  $("#task-dialog .form-feedback").hidden = true;
+  $("#task-dialog-title").textContent = task ? "Modifier la tâche" : "Nouvelle tâche";
+  $("#task-name").value = task?.name ?? "";
+  $("#task-room").value = task?.room ?? "";
+  $("#task-frequency").value = task?.frequency ?? 7;
+  $("#task-last-done").value = task?.lastDone ?? "";
+  $("#task-last-done").max = core.today();
+  $("#delete-task").hidden = !task;
+  taskDialog.showModal();
+}
+
+$("#add-task").addEventListener("click", () => openTask());
+$("#task-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = $("#task-name").value.trim();
+  const room = $("#task-room").value.trim();
+  if (!name || !room) {
+    notify("Renseignez un nom de tâche et une pièce.");
+    return;
+  }
+  const lastDone = $("#task-last-done").value || null;
+  if (lastDone !== null && lastDone > core.today()) {
+    notify("Le dernier ménage ne peut pas être dans le futur.");
+    return;
+  }
+  const task = { id: editingId ?? crypto.randomUUID(), name, room, frequency: Number($("#task-frequency").value), lastDone };
+  const tasks = editingId ? state.tasks.map((item) => item.id === editingId ? task : item) : [...state.tasks, task];
+  if (save({ ...state, tasks })) {
+    taskDialog.close();
+    notify("Tâche enregistrée.");
+  }
+});
+
+$("#delete-task").addEventListener("click", () => {
+  if (confirm("Supprimer cette tâche et sa date de dernier ménage ?") &&
+      save({ ...state, tasks: state.tasks.filter((task) => task.id !== editingId) })) {
+    taskDialog.close();
+    notify("Tâche supprimée.");
+  }
+});
+
+$("#toggle-vacation").addEventListener("click", () => {
+  const date = core.today();
+  const away = state.vacations.some((vacation) => core.isAway(vacation, date));
+  if (away && !confirm("Reprendre le suivi aujourd’hui ? Toutes les absences en cours se termineront aujourd’hui. Les absences futures restent programmées.")) return;
+  const vacations = away ? core.returnToday(state.vacations, date)
+    : [...state.vacations, { id: crypto.randomUUID(), start: date, end: null }];
+  if (save({ ...state, vacations })) notify(away ? "Bon retour ! Les compteurs reprennent." : "Bonnes vacances ! Les compteurs sont en pause.");
+});
+
+$("#plan-vacation").addEventListener("click", () => {
+  $("#vacation-form").reset();
+  $("#vacation-dialog .form-feedback").hidden = true;
+  $("#vacation-start").value = core.today();
+  $("#vacation-end").min = core.today();
+  $("#vacation-end").setCustomValidity("");
+  vacationDialog.showModal();
+});
+$("#vacation-start").addEventListener("input", () => {
+  $("#vacation-end").min = $("#vacation-start").value;
+  $("#vacation-end").setCustomValidity("");
+});
+$("#vacation-end").addEventListener("input", () => $("#vacation-end").setCustomValidity(""));
+$("#vacation-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const start = $("#vacation-start").value;
+  const end = $("#vacation-end").value;
+  if (end <= start) {
+    $("#vacation-end").setCustomValidity("Le retour doit être après le départ.");
+    $("#vacation-end").reportValidity();
+    return;
+  }
+  const vacation = { id: crypto.randomUUID(), start, end };
+  if (save({ ...state, vacations: [...state.vacations, vacation] })) {
+    vacationDialog.close();
+    notify("Absence enregistrée. La pause et la reprise seront automatiques.");
+  }
+});
+document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+$("#room-filter").addEventListener("change", render);
+$("#status-filter").addEventListener("change", render);
+$("#add-examples").addEventListener("click", () => {
+  const examples = [
+    ["Passer l’aspirateur", "Salon", 7],
+    ["Nettoyer le plan de travail", "Cuisine", 1],
+    ["Nettoyer les sanitaires", "Salle de bain", 7],
+    ["Changer les draps", "Chambre", 14],
+  ].map(([name, room, frequency]) => ({ id: crypto.randomUUID(), name, room, frequency, lastDone: null }));
+  if (save({ ...state, tasks: [...state.tasks, ...examples] })) notify("Quelques idées ajoutées. Adaptez-les à votre maison.");
+});
+
+// Refresh on return and at midnight, including after suspended mobile sessions.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+setInterval(() => { if (core.today() !== renderedDate) render(); }, 1000);
+window.addEventListener("storage", (event) => {
+  if (event.key !== STORAGE_KEY && event.key !== null) return;
+  // Avoid overwriting newer data with an edit started in another window.
+  taskDialog.close();
+  vacationDialog.close();
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    state = saved === null ? { version: 1, tasks: [], vacations: [] } : core.validateState(JSON.parse(saved));
+    storageBlocked = false;
+    $("#storage-error").hidden = true;
+    render();
+    notify("Données actualisées depuis une autre fenêtre.");
+  } catch (error) {
+    storageBlocked = true;
+    storageError(error, "Les données d’une autre fenêtre sont illisibles. Enregistrement bloqué pour éviter de les écraser.");
+  }
+});
+
+async function prepareOfflineMode() {
+  const status = $("#offline-status");
+  if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+    status.textContent = "Mode hors ligne indisponible : utilisez HTTPS ou localhost et un navigateur compatible.";
     return;
   }
   try {
@@ -124,12 +300,10 @@ async function prepareOfflineMode() {
       if (!worker) throw new Error("Aucun service worker disponible.");
       await new Promise((resolve, reject) => {
         const checkState = () => {
-          if (worker.state === "activated") {
+          if (worker.state === "activated" || worker.state === "redundant") {
             worker.removeEventListener("statechange", checkState);
-            resolve();
-          } else if (worker.state === "redundant") {
-            worker.removeEventListener("statechange", checkState);
-            reject(new Error("Installation du cache hors ligne échouée."));
+            if (worker.state === "activated") resolve();
+            else reject(new Error("Installation du cache hors ligne échouée."));
           }
         };
         worker.addEventListener("statechange", checkState);
@@ -137,11 +311,18 @@ async function prepareOfflineMode() {
       });
     }
     await navigator.serviceWorker.ready;
-    status.textContent = "Prête à fonctionner hors ligne";
+    status.textContent = registration.waiting ? "Mise à jour prête : fermez puis rouvrez l’application." : "Prête à fonctionner hors ligne";
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      worker?.addEventListener("statechange", () => {
+        if (worker.state === "installed" && registration.active) status.textContent = "Mise à jour prête : fermez puis rouvrez l’application.";
+      });
+    });
   } catch (error) {
     console.error("Impossible de préparer le mode hors ligne :", error);
     status.textContent = "Mode hors ligne indisponible. Rechargez avec une connexion.";
   }
 }
 
+render();
 prepareOfflineMode();

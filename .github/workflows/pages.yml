@@ -23,12 +23,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check cleaning and vacation calculations
+        run: node --test
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Prepare website
         run: |
           mkdir _site
-          cp index.html styles.css app.js sw.js manifest.webmanifest _site/
+          cp index.html styles.css core.js app.js sw.js manifest.webmanifest _site/
           cp -r icons _site/
       - name: Upload website
         uses: actions/upload-pages-artifact@v3

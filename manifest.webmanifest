@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Hello — Un petit moment de magie",
-  "short_name": "Hello",
-  "description": "Un bouton, un Hello World et un feu d'artifice.",
+  "name": "Casa — Le ménage à votre rythme",
+  "short_name": "Casa",
+  "description": "Suivez votre ménage et suspendez les compteurs pendant vos vacances.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
