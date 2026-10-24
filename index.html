@@ -71,6 +71,22 @@
             <button type="button" class="secondary" id="add-examples">Ajouter des exemples</button>
           </div>
         </section>
+        <section class="data-safety card" aria-labelledby="data-safety-title">
+          <p class="eyebrow">GARDER UNE COPIE, GARDER L’ESPRIT LIBRE</p>
+          <h2 id="data-safety-title">Protéger mes données</h2>
+          <p>Sur iPhone, installez Casa sur l’écran d’accueil et ouvrez-la depuis son icône, hors navigation privée.</p>
+          <p id="persistence-status" role="status">Vérification de la protection du stockage…</p>
+          <button type="button" class="secondary" id="request-persistence" disabled>Protéger le stockage local</button>
+          <p>Une sauvegarde reste indispensable : l’effacement des données ou un changement d’iPhone peut faire perdre le suivi. Conservez une copie dans Fichiers / iCloud Drive, puis renouvelez-la après vos changements importants.</p>
+          <div class="actions">
+            <button type="button" class="primary" id="export-backup">Sauvegarder dans un fichier</button>
+            <button type="button" class="secondary" id="import-backup">Restaurer une sauvegarde</button>
+          </div>
+          <input type="file" id="backup-file" accept=".json,application/json" aria-label="Choisir une sauvegarde Casa" hidden>
+          <p class="hint">Sur iPhone : dans le menu de partage, choisissez « Enregistrer dans Fichiers », puis iCloud Drive si souhaité.</p>
+          <p class="hint">Le fichier contient toutes vos tâches, pièces, dates de ménage et absences. La restauration remplace les données actuelles après confirmation. Aucune synchronisation automatique.</p>
+          <p id="backup-feedback" class="notice" role="status" hidden></p>
+        </section>
         <aside class="install-note">
           <strong>Votre maison, même sans connexion.</strong>
           Sur iPhone : Safari → Partager → Sur l’écran d’accueil.

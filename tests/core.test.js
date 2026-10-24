@@ -95,3 +95,47 @@ test("today uses local date components", () => {
   assert.equal(core.today(new Date(2026, 0, 2, 0, 1)), "2026-01-02");
   assert.equal(core.today(new Date(2026, 11, 31, 23, 59)), "2026-12-31");
 });
+
+test("backup round-trip preserves every task and vacation without changing live state", () => {
+  const original = state([
+    { ...task(), name: "Évier <script>", room: "Cuisine" },
+    { ...task(null, 1), id: "t2" },
+  ], [
+    vacation("2026-10-04", "2026-10-11"),
+    vacation("2026-11-01", null, "v2"),
+  ]);
+  const before = JSON.stringify(original);
+  const now = new Date("2026-10-24T08:15:00Z");
+  const text = core.serializeBackup(original, now);
+  const restored = core.parseBackup(text);
+  assert.equal(restored.exportedAt, now.toISOString());
+  assert.deepEqual(restored.data, original);
+  assert.equal(JSON.stringify(original), before);
+  restored.data.tasks[0].name = "Changed";
+  assert.equal(JSON.stringify(original), before);
+  assert.equal(JSON.parse(text).format, "casa-backup");
+  assert.deepEqual(core.parseBackup(core.serializeBackup(state([], []))).data, state([], []));
+});
+
+test("backup validation rejects malformed, foreign, future and damaged backups", () => {
+  const valid = JSON.parse(core.serializeBackup(state()));
+  for (const invalid of [
+    "{", "null", "[]", JSON.stringify(state()), JSON.stringify({ ...valid, format: "other" }),
+    JSON.stringify({ ...valid, version: 2 }),
+    JSON.stringify({ ...valid, exportedAt: null }),
+    JSON.stringify({ ...valid, exportedAt: "not a date" }),
+    JSON.stringify({ ...valid, data: { ...state(), version: 2 } }),
+    JSON.stringify({ ...valid, data: state([{ ...task(), frequency: 0 }]) }),
+    JSON.stringify({ ...valid, data: state([task(), task()]) }),
+    JSON.stringify({ ...valid, data: state([], [vacation("2026-10-11", "2026-10-04")]) }),
+  ]) assert.throws(() => core.parseBackup(invalid));
+  assert.throws(() => core.serializeBackup(state([{ ...task(), room: "" }])));
+});
+
+test("backup only includes known fields, not arbitrary imported properties", () => {
+  const original = { ...state([{ ...task(), extra: "ignored" }]), unrelated: true };
+  const backup = JSON.parse(core.serializeBackup(original));
+  backup.data.unknown = "ignored";
+  backup.data.tasks[0].extra = "ignored";
+  assert.deepEqual(core.parseBackup(JSON.stringify(backup)).data, state());
+});

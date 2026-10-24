@@ -71,6 +71,11 @@ h3 { font-size: 18px; line-height: 1.4; letter-spacing: -.3px; margin: 8px 0 14p
 .complete-button:hover:not(:disabled) { background: #e8dff7; }
 .empty { padding: 32px 20px; text-align: center; }
 .empty p { color: #776b86; line-height: 1.7; font-size: 14px; }
+.data-safety { margin-top: 28px; padding: 25px 28px; }
+.data-safety > p:not(.eyebrow) { font-size: 13px; line-height: 1.8; color: #6b5d7d; }
+.data-safety > .hint { font-size: 11px !important; }
+.data-safety > .notice { background: #f2edf9; }
+.data-safety > .notice.error { color: #8d2939; background: #ffebee; }
 .install-note { margin: 32px auto 24px; max-width: 510px; text-align: center; color: #776b86; font-size: 11px; line-height: 1.9; }
 .install-note strong { display: block; font-weight: 650; }
 footer { flex-wrap: wrap; border-top: 1px solid #e5dff0; padding-top: 18px; color: #776b86; font-size: 10px; line-height: 1.7; }
@@ -97,6 +102,7 @@ input { display: block; width: 100%; min-width: 0; margin-top: 7px; padding: 10p
   .page { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
   .badge { font-size: 10px; max-width: 145px; text-align: center; }
   .vacation { padding: 22px 18px; }
+  .data-safety { padding: 22px 18px; }
   .vacation-icon { display: none; }
   .vacation h2 { font-size: 19px; }
   .task-list { grid-template-columns: 1fr; }

@@ -20,6 +20,38 @@ du site supprime aussi le suivi. Un échec de lecture bloque les modifications
 pour ne pas écraser les données existantes ; un échec d’écriture est affiché
 et n’est jamais présenté comme un enregistrement réussi.
 
+## Protéger ses données et changer d’iPhone
+
+La section **Protéger mes données** propose trois actions, sans compte :
+
+- **Protéger le stockage local** appelle `navigator.storage.persist()` après
+  un clic, si disponible. Le statut indique si la protection est accordée,
+  refusée, indisponible ou impossible à vérifier. Elle n’est jamais garantie :
+  le navigateur décide, et elle ne protège pas d’un effacement volontaire.
+- **Sauvegarder dans un fichier** produit un fichier JSON versionné contenant
+  toutes les tâches, pièces, fréquences, dates de dernier ménage et absences.
+  Si le partage de fichiers est disponible, choisir **Enregistrer dans Fichiers**
+  puis iCloud Drive dans la feuille de partage iOS. Sinon, récupérer le fichier
+  dans les téléchargements. Vérifier sa présence : Casa ne peut pas vérifier
+  que le fichier a effectivement été conservé. Un partage annulé est signalé.
+- **Restaurer une sauvegarde** lit et valide entièrement un fichier Casa
+  (10 Mo maximum), puis demande confirmation avec sa date et son contenu.
+  La restauration **remplace** les données actuelles, sans fusion. Une annulation,
+  un fichier invalide ou une erreur d’écriture ne remplace pas les données.
+  Une sauvegarde valide peut aussi remplacer un stockage illisible après
+  confirmation explicite ; les autres modifications restent bloquées.
+
+Sur iPhone, installer Casa sur l’écran d’accueil et l’utiliser depuis son icône,
+hors navigation privée. Le stockage peut différer entre Safari et l’application
+installée : exporter puis restaurer permet de transférer le suivi si nécessaire.
+Conserver une copie hors du stockage de Casa, idéalement dans iCloud Drive, et la
+renouveler après les changements importants. Avant un changement d’iPhone,
+exporter sur l’ancien puis restaurer le fichier sur le nouveau.
+Les sauvegardes contiennent les noms des pièces et les dates d’absence :
+les conserver dans un emplacement privé. Aucun fichier n’est envoyé à un serveur
+par Casa ; un partage ou un enregistrement dans iCloud Drive dépend du choix de
+l’utilisateur. Il n’y a pas de sauvegarde ni de synchronisation automatique.
+
 ## Vacances : deux façons de mettre en pause
 
 - **Je pars aujourd’hui** suspend le suivi jusqu’au clic sur **Je suis de retour**.

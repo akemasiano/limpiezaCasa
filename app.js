@@ -30,8 +30,8 @@ try {
   storageError(error, "Impossible de lire vos données. Aucune donnée ne sera écrasée. Vérifiez que le stockage du navigateur est autorisé ; si le problème persiste, conservez les données du site avant toute réinitialisation.");
 }
 
-function save(next) {
-  if (storageBlocked) {
+function save(next, { replaceBlocked = false } = {}) {
+  if (storageBlocked && !replaceBlocked) {
     notify("Enregistrement bloqué : le stockage de cet appareil est inaccessible ou illisible.");
     return false;
   }
@@ -44,6 +44,7 @@ function save(next) {
     return false;
   }
   state = next;
+  storageBlocked = false;
   $("#storage-error").hidden = true;
   render();
   return true;
@@ -266,6 +267,115 @@ $("#add-examples").addEventListener("click", () => {
   if (save({ ...state, tasks: [...state.tasks, ...examples] })) notify("Quelques idées ajoutées. Adaptez-les à votre maison.");
 });
 
+function backupFeedback(text, error = false) {
+  const feedback = $("#backup-feedback");
+  feedback.textContent = text;
+  feedback.classList.toggle("error", error);
+  feedback.hidden = false;
+}
+
+$("#export-backup").addEventListener("click", async () => {
+  if (storageBlocked) {
+    backupFeedback("Sauvegarde impossible : les données locales sont illisibles ou inaccessibles. Aucune copie vide ne sera créée à leur place.", true);
+    return;
+  }
+  const button = $("#export-backup");
+  button.disabled = true;
+  try {
+    const now = new Date();
+    const filename = `casa-sauvegarde-${now.toISOString().replace(/[:.]/g, "-")}.json`;
+    const file = new File([core.serializeBackup(state, now)], filename, { type: "application/json" });
+    if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      backupFeedback("Fichier transmis au menu de partage. Vérifiez qu’il a bien été enregistré dans Fichiers / iCloud Drive : Casa ne peut pas le vérifier.");
+    } else {
+      const url = URL.createObjectURL(file);
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        backupFeedback("Téléchargement demandé. Vérifiez le fichier JSON dans Téléchargements ou Fichiers, puis conservez-le dans iCloud Drive si souhaité.");
+      } finally {
+        // Safari may still be consuming the file after the click returns.
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    }
+  } catch (error) {
+    if (error.name === "AbortError") {
+      backupFeedback("Partage annulé. Aucun enregistrement de fichier n’a été confirmé.");
+    } else {
+      console.error("Impossible de créer ou de partager la sauvegarde :", error);
+      backupFeedback("Sauvegarde non effectuée. Réessayez et vérifiez les autorisations de téléchargement ou de partage du navigateur.", true);
+    }
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#import-backup").addEventListener("click", () => {
+  $("#backup-file").value = "";
+  $("#backup-file").click();
+});
+$("#backup-file").addEventListener("change", async () => {
+  const file = $("#backup-file").files[0];
+  if (!file) return;
+  const button = $("#import-backup");
+  button.disabled = true;
+  try {
+    if (file.size > 10 * 1024 * 1024) throw new Error("La sauvegarde dépasse la limite de 10 Mo.");
+    const backup = core.parseBackup(await file.text());
+    const exportedAt = new Intl.DateTimeFormat("fr", { dateStyle: "medium", timeStyle: "short" }).format(new Date(backup.exportedAt));
+    const confirmed = confirm(`Restaurer la sauvegarde du ${exportedAt} (${backup.data.tasks.length} tâche(s), ${backup.data.vacations.length} absence(s)) ?\n\nToutes les données actuelles de Casa sur cet appareil seront remplacées, même si elles sont illisibles. Conservez d’abord une copie de vos données actuelles si nécessaire. Cette action n’est pas une fusion.`);
+    if (!confirmed) {
+      backupFeedback("Restauration annulée. Les données actuelles sont conservées.");
+      return;
+    }
+    if (save(backup.data, { replaceBlocked: true })) {
+      $("#room-filter").value = "";
+      $("#status-filter").value = "all";
+      render();
+      backupFeedback("Sauvegarde restaurée et enregistrée sur cet appareil. Vos tâches et absences sont à nouveau disponibles, même hors ligne.");
+    } else {
+      backupFeedback("Restauration non enregistrée. Les données précédentes n’ont pas été remplacées. Vérifiez l’espace disponible et les autorisations de stockage.", true);
+    }
+  } catch (error) {
+    console.error("Impossible de restaurer la sauvegarde :", error);
+    backupFeedback("Fichier illisible, trop volumineux (10 Mo maximum) ou sauvegarde Casa invalide / incompatible. Aucune donnée n’a été remplacée.", true);
+  } finally {
+    button.disabled = false;
+    $("#backup-file").value = "";
+  }
+});
+
+async function updateStoragePersistence(request = false) {
+  const button = $("#request-persistence");
+  const status = $("#persistence-status");
+  const storage = navigator.storage;
+  button.disabled = true;
+  if (!storage || typeof storage.persisted !== "function") {
+    status.textContent = "Ce navigateur ne permet pas de vérifier ni de demander le stockage persistant. Conservez une sauvegarde dans un fichier.";
+    return;
+  }
+  const canRequest = typeof storage.persist === "function";
+  try {
+    const persistent = request && canRequest ? await storage.persist() : await storage.persisted();
+    status.textContent = persistent
+      ? "Stockage persistant accordé : le risque de suppression automatique est réduit, mais cela ne protège pas d’un effacement volontaire. Gardez une sauvegarde."
+      : !canRequest ? "Stockage persistant non accordé et demande indisponible dans ce navigateur. Conservez une sauvegarde."
+        : request ? "Le navigateur n’a pas accordé le stockage persistant. Installez Casa sur l’écran d’accueil, réessayez depuis son icône et gardez une sauvegarde."
+          : "Stockage local standard. Vous pouvez demander une protection contre la suppression automatique ; le navigateur décide de l’accorder ou non.";
+    button.disabled = persistent || !canRequest;
+  } catch (error) {
+    console.error("Impossible de vérifier ou de demander le stockage persistant :", error);
+    status.textContent = "Protection du stockage non vérifiée : la demande ou la vérification a échoué. Réessayez et conservez une sauvegarde.";
+    button.disabled = !canRequest;
+  }
+}
+$("#request-persistence").addEventListener("click", () => updateStoragePersistence(true));
+
 // Refresh on return and at midnight, including after suspended mobile sessions.
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
 setInterval(() => { if (core.today() !== renderedDate) render(); }, 1000);
@@ -325,4 +435,5 @@ async function prepareOfflineMode() {
 }
 
 render();
+updateStoragePersistence();
 prepareOfflineMode();

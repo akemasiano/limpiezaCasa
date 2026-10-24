@@ -81,7 +81,34 @@
     });
   }
 
-  const api = { dayNumber, today, isAway, elapsedDays, taskStatus, validateState, returnToday };
+  function snapshot(state) {
+    validateState(state);
+    return {
+      version: 1,
+      tasks: state.tasks.map(({ id, name, room, frequency, lastDone }) => ({ id, name, room, frequency, lastDone })),
+      vacations: state.vacations.map(({ id, start, end }) => ({ id, start, end })),
+    };
+  }
+
+  function serializeBackup(state, now = new Date()) {
+    return JSON.stringify({
+      format: "casa-backup",
+      version: 1,
+      exportedAt: now.toISOString(),
+      data: snapshot(state),
+    }, null, 2);
+  }
+
+  function parseBackup(text) {
+    const backup = JSON.parse(text);
+    if (!backup || backup.format !== "casa-backup" || backup.version !== 1 ||
+        typeof backup.exportedAt !== "string" || !Number.isFinite(Date.parse(backup.exportedAt))) {
+      throw new Error("Ce fichier n’est pas une sauvegarde Casa compatible.");
+    }
+    return { exportedAt: backup.exportedAt, data: snapshot(backup.data) };
+  }
+
+  const api = { dayNumber, today, isAway, elapsedDays, taskStatus, validateState, returnToday, serializeBackup, parseBackup };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else globalThis.CasaCore = Object.freeze(api);
 })();
