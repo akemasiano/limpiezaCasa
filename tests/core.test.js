@@ -4,7 +4,9 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const core = require("../core.js");
 const vacation = (start, end = null, id = "v1") => ({ id, start, end });
-const task = (lastDone = "2026-10-01", frequency = 7) => ({ id: "t1", name: "Aspirateur", room: "Salon", frequency, lastDone });
+const task = (lastDone = "2026-10-01", frequency = 7) => ({
+  id: "t1", name: "Aspirateur", room: "Salon", frequency, lastDone, durationMinutes: 15, lastSkipped: null,
+});
 const state = (tasks = [task()], vacations = []) => ({ version: 1, tasks, vacations });
 
 test("counts calendar days across month, year and daylight-saving boundaries", () => {
@@ -121,7 +123,7 @@ test("backup validation rejects malformed, foreign, future and damaged backups",
   const valid = JSON.parse(core.serializeBackup(state()));
   for (const invalid of [
     "{", "null", "[]", JSON.stringify(state()), JSON.stringify({ ...valid, format: "other" }),
-    JSON.stringify({ ...valid, version: 2 }),
+    JSON.stringify({ ...valid, version: 3 }),
     JSON.stringify({ ...valid, exportedAt: null }),
     JSON.stringify({ ...valid, exportedAt: "not a date" }),
     JSON.stringify({ ...valid, data: { ...state(), version: 2 } }),
@@ -138,4 +140,74 @@ test("backup only includes known fields, not arbitrary imported properties", () 
   backup.data.unknown = "ignored";
   backup.data.tasks[0].extra = "ignored";
   assert.deepEqual(core.parseBackup(JSON.stringify(backup)).data, state());
+});
+
+test("legacy tasks and backups receive 15 minutes without mutating their source", () => {
+  const { durationMinutes, lastSkipped, ...legacyTask } = task();
+  const legacy = state([legacyTask]);
+  const before = JSON.stringify(legacy);
+  assert.deepEqual(core.validateState(legacy), state());
+  assert.equal(JSON.stringify(legacy), before);
+  const backup = { format: "casa-backup", version: 1, exportedAt: "2026-10-24T08:00:00Z", data: legacy };
+  assert.deepEqual(core.parseBackup(JSON.stringify(backup)).data, state());
+  assert.equal(core.dailyMinutes([legacyTask], "2026-10-24", []), 15);
+});
+
+test("invalid durations and skipped dates are rejected in storage and backups", () => {
+  for (const durationMinutes of [0, -1, 1.5, 1441, null, "15", NaN, Infinity]) {
+    const invalid = state([{ ...task(), durationMinutes }]);
+    assert.throws(() => core.validateState(invalid));
+    assert.throws(() => core.serializeBackup(invalid));
+  }
+  for (const lastSkipped of ["", "2026-02-30", false, 42]) {
+    assert.throws(() => core.validateState(state([{ ...task(), lastSkipped }])));
+  }
+  for (const durationMinutes of [1, 1440]) {
+    assert.equal(core.validateState(state([{ ...task(), durationMinutes }])).tasks[0].durationMinutes, durationMinutes);
+  }
+  const backup = JSON.parse(core.serializeBackup(state()));
+  backup.data.tasks[0].durationMinutes = null;
+  assert.throws(() => core.parseBackup(JSON.stringify(backup)));
+});
+
+test("skipping restarts the interval without claiming a cleaning took place", () => {
+  for (const lastDone of [null, "2026-10-01"]) {
+    const skipped = { ...task(lastDone), lastSkipped: "2026-10-24" };
+    assert.deepEqual(core.taskStatus(skipped, "2026-10-24", []), { elapsed: 0, due: false, remaining: 7 });
+    assert.equal(core.taskStatus(skipped, "2026-10-30", []).due, false);
+    assert.equal(core.taskStatus(skipped, "2026-10-31", []).due, true);
+    assert.equal(skipped.lastDone, lastDone);
+    assert.equal(core.taskStatus({ ...skipped, lastSkipped: null }, "2026-10-24", []).due, true);
+  }
+  assert.equal(core.taskStatus({ ...task("2026-10-25"), lastSkipped: "2026-10-24" }, "2026-10-31", []).due, false);
+  assert.equal(core.taskStatus({ ...task(null, 1), lastSkipped: "2026-10-24" }, "2026-10-25", []).due, true);
+});
+
+test("skipped intervals respect overlapping vacations and calendar boundaries", () => {
+  const skipped = { ...task(null), lastSkipped: "2026-10-24" };
+  const pauses = [vacation("2026-10-25", "2026-10-28"), vacation("2026-10-26", "2026-10-29", "v2")];
+  assert.deepEqual(core.taskStatus(skipped, "2026-10-31", pauses), { elapsed: 3, due: false, remaining: 4 });
+  assert.equal(core.taskStatus(skipped, "2026-11-04", pauses).due, true);
+});
+
+test("daily estimate sums all due rooms and excludes completed or skipped tasks", () => {
+  const tasks = [
+    { ...task(null), durationMinutes: 20 },
+    { ...task("2026-10-01"), id: "t2", room: "Cuisine", durationMinutes: 45 },
+    { ...task("2026-10-24"), id: "t3", durationMinutes: 30 },
+    { ...task("2026-10-23"), id: "t4", durationMinutes: 10 },
+    { ...task(null), id: "t5", lastSkipped: "2026-10-24", durationMinutes: 25 },
+  ];
+  assert.equal(core.dailyMinutes(tasks, "2026-10-24", []), 65);
+  assert.equal(core.dailyMinutes([], "2026-10-24", []), 0);
+  assert.equal(core.dailyMinutes(tasks, "2026-10-24", [vacation("2026-10-24")]), 0);
+  assert.equal(core.dailyMinutes(tasks, "2026-10-25", [vacation("2026-10-24", "2026-10-25")]), 65);
+  assert.equal(core.dailyMinutes([{ ...task(null, 1), lastSkipped: "2026-10-24", durationMinutes: 25 }], "2026-10-25", []), 25);
+});
+
+test("v2 backups preserve duration and skip dates and still accept v1 backups", () => {
+  const original = state([{ ...task(), durationMinutes: 95, lastSkipped: "2026-10-24" }]);
+  const backup = core.serializeBackup(original);
+  assert.equal(JSON.parse(backup).version, 2);
+  assert.deepEqual(core.parseBackup(backup).data, original);
 });

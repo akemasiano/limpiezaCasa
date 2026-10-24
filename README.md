@@ -13,6 +13,20 @@ facultativement, la date du dernier ménage. Sans date, la tâche est immédiate
 tâche. Les exemples sont facultatifs et modifiables. Les filtres permettent de
 voir une pièce ou uniquement les tâches à faire.
 
+Chaque tâche a une **durée estimée en minutes**, modifiable entre 1 et 1440 minutes.
+Les tâches existantes et les anciennes sauvegardes reçoivent **15 minutes** par
+défaut. L’accueil indique le temps **restant aujourd’hui** : somme des durées des
+tâches à faire, toutes pièces confondues, indépendamment des filtres. Le total
+diminue lorsqu’une tâche est faite ou ignorée ; il vaut zéro pendant une absence.
+
+**Ignorer cette fois** passe l’occurrence sans enregistrer de ménage : la date du
+dernier ménage reste inchangée, et le délai habituel redémarre aujourd’hui, en
+jours de présence. Par exemple, une tâche hebdomadaire ignorée le 24 redevient à
+faire le 31, sans absence entre-temps. L’occurrence ignorée reste identifiable
+dans la liste complète ; **Rétablir cette occurrence** permet d’annuler ce choix
+avant la prochaine échéance. On peut aussi effectuer la tâche plus tôt avec
+**C’est fait**. Les actions de validation et d’ignorance sont bloquées en vacances.
+
 Les données sont enregistrées dans le stockage local du navigateur de cet
 appareil. Elles persistent après fermeture et fonctionnent hors ligne, mais ne
 sont pas synchronisées entre appareils ou navigateurs. Supprimer les données
@@ -44,7 +58,9 @@ La section **Protéger mes données** propose trois actions, sans compte :
   refusée, indisponible ou impossible à vérifier. Elle n’est jamais garantie :
   le navigateur décide, et elle ne protège pas d’un effacement volontaire.
 - **Sauvegarder dans un fichier** produit un fichier JSON versionné contenant
-  toutes les tâches, pièces, fréquences, dates de dernier ménage et absences.
+  toutes les tâches, pièces, fréquences, durées estimées, dates de dernier ménage,
+  dernières occurrences ignorées et absences. Le format de sauvegarde v2 conserve
+  ces informations ; les anciennes sauvegardes v1 restent importables.
   Si le partage de fichiers est disponible, choisir **Enregistrer dans Fichiers**
   puis iCloud Drive dans la feuille de partage iOS. Sinon, récupérer le fichier
   dans les téléchargements. Vérifier sa présence : Casa ne peut pas vérifier

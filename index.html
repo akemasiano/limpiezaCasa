@@ -47,6 +47,10 @@
           <div><strong id="stat-ok">0</strong><span>à jour</span></div>
           <div><strong id="stat-total">0</strong><span>tâches au total</span></div>
         </section>
+        <div class="daily-estimate" data-view="maison" role="status">
+          <strong id="stat-duration">0 min</strong>
+          <span id="duration-context">Restantes aujourd’hui · toutes les pièces, indépendamment des filtres.</span>
+        </div>
         <section id="maison" data-view="maison" class="tasks-section" aria-labelledby="tasks-title">
           <div class="section-heading tasks-heading">
             <h2 id="tasks-title">Mes tâches</h2>
@@ -94,7 +98,7 @@
           </div>
           <input type="file" id="backup-file" accept=".json,application/json" aria-label="Choisir une sauvegarde Casa" hidden>
           <p class="hint">Sur iPhone : dans le menu de partage, choisissez « Enregistrer dans Fichiers », puis iCloud Drive si souhaité.</p>
-          <p class="hint">Le fichier contient toutes vos tâches, pièces, dates de ménage et absences. La restauration remplace les données actuelles après confirmation. Aucune synchronisation automatique.</p>
+          <p class="hint">Le fichier contient toutes vos tâches, durées estimées, occurrences ignorées, pièces, dates de ménage et absences. La restauration remplace les données actuelles après confirmation. Aucune synchronisation automatique.</p>
           <p id="backup-feedback" class="notice" role="status" hidden></p>
           <h2 class="update-heading">Mises à jour de Casa</h2>
           <p>Actualisez l’application sans supprimer vos tâches ni vos absences. Une connexion est nécessaire pour rechercher une nouvelle version.</p>
@@ -122,8 +126,9 @@
         <label>Pièce<input id="task-room" name="room" required maxlength="60" list="room-suggestions" placeholder="Salon" autocomplete="off"></label>
         <datalist id="room-suggestions"></datalist>
         <label>Tous les combien de jours de présence ?<input id="task-frequency" name="frequency" type="number" min="1" max="3650" step="1" value="7" required inputmode="numeric"></label>
+        <label>Durée estimée (minutes)<input id="task-duration" name="durationMinutes" type="number" min="1" max="1440" step="1" value="15" required inputmode="numeric"></label>
         <label>Dernier ménage <span class="label-hint">(facultatif)</span><input id="task-last-done" name="lastDone" type="date"></label>
-        <p class="hint">Sans date, la tâche sera à faire dès maintenant. Les jours d’absence sont déduits automatiquement.</p>
+        <p class="hint">Sans date ni occurrence ignorée, la tâche sera à faire dès maintenant. Les jours d’absence sont déduits automatiquement.</p>
         <div class="dialog-actions"><button type="button" class="danger" id="delete-task" hidden>Supprimer</button><button type="submit" class="primary">Enregistrer</button></div>
       </form>
     </dialog>

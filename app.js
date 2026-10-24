@@ -36,7 +36,7 @@ function save(next, { replaceBlocked = false } = {}) {
     return false;
   }
   try {
-    core.validateState(next);
+    next = core.validateState(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch (error) {
     storageError(error, "Modification non enregistrée. Le stockage est peut-être plein ou désactivé. Vos données précédentes sont conservées.");
@@ -109,6 +109,10 @@ function render() {
   $("#stat-due").textContent = due;
   $("#stat-ok").textContent = tasks.length - due;
   $("#stat-total").textContent = tasks.length;
+  const minutes = core.dailyMinutes(state.tasks, date, state.vacations);
+  const hours = Math.floor(minutes / 60);
+  $("#stat-duration").textContent = hours ? `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ""}` : `${minutes} min`;
+  $("#duration-context").textContent = away ? "Suivi en pause pendant l’absence." : "Restantes aujourd’hui · toutes les pièces, indépendamment des filtres.";
   $("#vacation-status").textContent = away
     ? "Mode vacances activé. Les compteurs sont en pause. Profitez, la maison peut attendre."
     : "Les jours d’absence ne comptent pas dans vos fréquences.";
@@ -156,10 +160,13 @@ function render() {
     top.append(makeElement("span", "room-label", task.room));
     top.append(actionButton("Modifier", "text-button", () => openTask(task), `Modifier ${task.name}, ${task.room}`));
     card.append(top, makeElement("h3", "", task.name));
-    const badge = elapsed === null ? "À commencer" : taskDue ? "À faire" : "À jour";
+    const skipped = task.lastSkipped && (task.lastDone === null || task.lastSkipped > task.lastDone);
+    const badge = skipped && !taskDue ? "Occurrence ignorée" : elapsed === null ? "À commencer" : taskDue ? "À faire" : "À jour";
     card.append(makeElement("span", `task-status ${taskDue ? "due" : "ok"}`, badge));
     const lastDone = task.lastDone === null ? "Pas encore effectuée" : `Dernier ménage : ${formatDate(task.lastDone)}`;
     card.append(makeElement("p", "last-done", lastDone));
+    card.append(makeElement("p", "task-duration", `Durée estimée : ${task.durationMinutes} min`));
+    if (skipped) card.append(makeElement("p", "hint", `Dernière occurrence ignorée : ${formatDate(task.lastSkipped)}`));
     const schedule = elapsed === null ? `Tous les ${task.frequency} jours de présence`
       : taskDue ? `${elapsed} jour${elapsed > 1 ? "s" : ""} de présence écoulé${elapsed > 1 ? "s" : ""} · fréquence ${task.frequency} j`
         : `Dans ${remaining} jour${remaining > 1 ? "s" : ""} de présence · fréquence ${task.frequency} j`;
@@ -178,12 +185,35 @@ function render() {
         notify("Terminez votre absence avant de valider le ménage.");
         return;
       }
-      if (save({ ...state, tasks: state.tasks.map((item) => item.id === task.id ? { ...item, lastDone: completionDate } : item) })) {
+      if (save({ ...state, tasks: state.tasks.map((item) => item.id === task.id ? { ...item, lastDone: completionDate, lastSkipped: null } : item) })) {
         notify(`${task.name} : c’est noté !`);
       }
     }, `Marquer comme fait : ${task.name}, ${task.room}`);
     complete.disabled = away || completedToday;
     card.append(complete);
+    if (taskDue) {
+      const skip = actionButton("Ignorer cette fois", "text-button skip-button", () => {
+        const skipDate = core.today();
+        const current = state.tasks.find((item) => item.id === task.id);
+        if (!current || state.vacations.some((vacation) => core.isAway(vacation, skipDate)) ||
+            !core.taskStatus(current, skipDate, state.vacations).due) {
+          render();
+          notify("Cette tâche ne peut pas être ignorée : elle n’est plus à faire ou le suivi est en pause.");
+          return;
+        }
+        if (save({ ...state, tasks: state.tasks.map((item) => item.id === task.id ? { ...item, lastSkipped: skipDate } : item) })) {
+          notify(`${task.name} : occurrence ignorée. Le délai habituel redémarre aujourd’hui, sans enregistrer de ménage.`);
+        }
+      }, `Ignorer cette fois : ${task.name}, ${task.room}`);
+      skip.disabled = away;
+      card.append(skip);
+    } else if (skipped) {
+      card.append(actionButton("Rétablir cette occurrence", "text-button skip-button", () => {
+        if (save({ ...state, tasks: state.tasks.map((item) => item.id === task.id ? { ...item, lastSkipped: null } : item) })) {
+          notify(`${task.name} : occurrence rétablie.`);
+        }
+      }, `Rétablir cette occurrence : ${task.name}, ${task.room}`));
+    }
     taskList.append(card);
   }
   $("#empty-state").hidden = filtered.length !== 0;
@@ -200,6 +230,7 @@ function openTask(task = null) {
   $("#task-name").value = task?.name ?? "";
   $("#task-room").value = task?.room ?? "";
   $("#task-frequency").value = task?.frequency ?? 7;
+  $("#task-duration").value = task?.durationMinutes ?? core.DEFAULT_DURATION_MINUTES;
   $("#task-last-done").value = task?.lastDone ?? "";
   $("#task-last-done").max = core.today();
   $("#delete-task").hidden = !task;
@@ -221,7 +252,16 @@ $("#task-form").addEventListener("submit", (event) => {
     notify("Le dernier ménage ne peut pas être dans le futur.");
     return;
   }
-  const task = { id: editingId ?? crypto.randomUUID(), name, room, frequency: Number($("#task-frequency").value), lastDone };
+  const previous = state.tasks.find((item) => item.id === editingId);
+  const durationMinutes = Number($("#task-duration").value);
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 1440) {
+    notify("Indiquez une durée entière entre 1 et 1440 minutes.");
+    return;
+  }
+  const task = {
+    id: editingId ?? crypto.randomUUID(), name, room, frequency: Number($("#task-frequency").value),
+    lastDone, durationMinutes, lastSkipped: previous?.lastSkipped ?? null,
+  };
   const tasks = editingId ? state.tasks.map((item) => item.id === editingId ? task : item) : [...state.tasks, task];
   if (save({ ...state, tasks })) {
     taskDialog.close();
