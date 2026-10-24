@@ -6,12 +6,27 @@ iPhone et Android. Casa est une application indépendante, sans affiliation à Q
 
 ## Suivre son ménage
 
-Ajouter une tâche avec une pièce, une fréquence en jours de présence et,
+Ajouter une tâche avec une pièce, une fréquence et,
 facultativement, la date du dernier ménage. Sans date, la tâche est immédiatement
 à faire. Le bouton **C’est fait** enregistre la date du jour et relance son compteur.
 **Modifier** permet de corriger la date, de changer la pièce ou de supprimer la
 tâche. Les exemples sont facultatifs et modifiables. Les filtres permettent de
 voir une pièce ou uniquement les tâches à faire.
+
+À la création comme à la modification, choisir **Journalier**, **Chaque X jours**,
+**Hebdomadaire**, **Chaque X semaines**, **Mensuel** ou **Chaque X mois**.
+Les choix variables affichent une quantité réglable avec **− / +** ou par saisie.
+La quantité minimale est 1 ; les limites sont 3650 jours, 521 semaines et 120 mois.
+Les tâches déjà enregistrées conservent exactement leur fréquence en jours :
+une ancienne fréquence de 30 jours n’est pas transformée en mois calendaire.
+
+Les jours et semaines utilisent les jours de présence (une semaine = 7 jours).
+Les mois sont **calendaires**, calculés depuis le dernier ménage ou la dernière
+occurrence ignorée, au même numéro de jour ou au dernier jour du mois cible :
+le 31 janvier + 1 mois donne le 28 février (29 en année bissextile), et + 2 mois
+donne le 31 mars. Les absences repoussent l’échéance d’autant de jours, sans
+compter deux fois les absences qui se chevauchent. Une nouvelle validation ou
+une occurrence ignorée redémarre le calcul depuis sa propre date.
 
 Chaque tâche a une **durée estimée en minutes**, modifiable entre 1 et 1440 minutes.
 Les tâches existantes et les anciennes sauvegardes reçoivent **15 minutes** par
@@ -20,8 +35,8 @@ tâches à faire, toutes pièces confondues, indépendamment des filtres. Le tot
 diminue lorsqu’une tâche est faite ou ignorée ; il vaut zéro pendant une absence.
 
 **Ignorer cette fois** passe l’occurrence sans enregistrer de ménage : la date du
-dernier ménage reste inchangée, et le délai habituel redémarre aujourd’hui, en
-jours de présence. Par exemple, une tâche hebdomadaire ignorée le 24 redevient à
+dernier ménage reste inchangée, et le délai habituel redémarre aujourd’hui selon
+la fréquence choisie. Par exemple, une tâche hebdomadaire ignorée le 24 redevient à
 faire le 31, sans absence entre-temps. L’occurrence ignorée reste identifiable
 dans la liste complète ; **Rétablir cette occurrence** permet d’annuler ce choix
 avant la prochaine échéance. On peut aussi effectuer la tâche plus tôt avec
@@ -59,8 +74,9 @@ La section **Protéger mes données** propose trois actions, sans compte :
   le navigateur décide, et elle ne protège pas d’un effacement volontaire.
 - **Sauvegarder dans un fichier** produit un fichier JSON versionné contenant
   toutes les tâches, pièces, fréquences, durées estimées, dates de dernier ménage,
-  dernières occurrences ignorées et absences. Le format de sauvegarde v2 conserve
-  ces informations ; les anciennes sauvegardes v1 restent importables.
+  dernières occurrences ignorées et absences. Le format de sauvegarde v3 conserve
+  aussi les unités jours/semaines/mois ; les anciennes sauvegardes v1 et v2
+  restent importables, avec leurs fréquences d’origine en jours.
   Si le partage de fichiers est disponible, choisir **Enregistrer dans Fichiers**
   puis iCloud Drive dans la feuille de partage iOS. Sinon, récupérer le fichier
   dans les téléchargements. Vérifier sa présence : Casa ne peut pas vérifier

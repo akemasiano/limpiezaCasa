@@ -4,6 +4,7 @@
   const DAY = 86400000;
   const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
   const DEFAULT_DURATION_MINUTES = 15;
+  const FREQUENCY_LIMITS = Object.freeze({ days: 3650, weeks: 521, months: 120 });
 
   function dayNumber(date) {
     if (typeof date !== "string" || !DATE_PATTERN.test(date)) throw new Error("Date invalide.");
@@ -39,11 +40,32 @@
     return end - start - paused;
   }
 
-  function taskStatus(task, date, vacations) {
-    const reference = task.lastSkipped && (task.lastDone === null || task.lastSkipped > task.lastDone)
+  function taskReference(task) {
+    return task.lastSkipped && (task.lastDone === null || task.lastSkipped > task.lastDone)
       ? task.lastSkipped : task.lastDone;
+  }
+
+  function intervalDays(task, date) {
+    const unit = task.frequencyUnit === undefined ? "days" : task.frequencyUnit;
+    if (unit === "days") return task.frequency;
+    if (unit === "weeks") return task.frequency * 7;
+    if (unit !== "months") throw new Error("Unité de fréquence invalide.");
+    const reference = taskReference(task) ?? date;
+    const start = new Date(dayNumber(reference) * DAY);
+    const target = new Date(start);
+    target.setUTCDate(1);
+    target.setUTCMonth(target.getUTCMonth() + task.frequency);
+    const monthEnd = new Date(target);
+    monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
+    target.setUTCDate(Math.min(start.getUTCDate(), monthEnd.getUTCDate()));
+    return (target - start) / DAY;
+  }
+
+  function taskStatus(task, date, vacations) {
+    const reference = taskReference(task);
     const elapsed = reference === null ? null : elapsedDays(reference, date, vacations);
-    return { elapsed, due: elapsed === null || elapsed >= task.frequency, remaining: elapsed === null ? 0 : Math.max(0, task.frequency - elapsed) };
+    const interval = intervalDays(task, date);
+    return { elapsed, due: elapsed === null || elapsed >= interval, remaining: elapsed === null ? 0 : Math.max(0, interval - elapsed) };
   }
 
   function dailyMinutes(tasks, date, vacations) {
@@ -66,8 +88,10 @@
       ids.add(item.id);
     }
     for (const task of state.tasks) {
+      const unit = task.frequencyUnit === undefined ? "days" : task.frequencyUnit;
       if (!validText(task.name, 100) || !validText(task.room, 60) ||
-          !Number.isInteger(task.frequency) || task.frequency < 1 || task.frequency > 3650) {
+          typeof unit !== "string" || !Object.hasOwn(FREQUENCY_LIMITS, unit) ||
+          !Number.isInteger(task.frequency) || task.frequency < 1 || task.frequency > FREQUENCY_LIMITS[unit]) {
         throw new Error("Tâche invalide.");
       }
       if (task.lastDone !== null) dayNumber(task.lastDone);
@@ -88,6 +112,7 @@
       ...state,
       tasks: state.tasks.map((task) => ({
         ...task,
+        frequencyUnit: task.frequencyUnit ?? "days",
         durationMinutes: task.durationMinutes ?? DEFAULT_DURATION_MINUTES,
         lastSkipped: task.lastSkipped ?? null,
       })),
@@ -106,8 +131,8 @@
     state = validateState(state);
     return {
       version: 1,
-      tasks: state.tasks.map(({ id, name, room, frequency, lastDone, durationMinutes, lastSkipped }) =>
-        ({ id, name, room, frequency, lastDone, durationMinutes, lastSkipped })),
+      tasks: state.tasks.map(({ id, name, room, frequency, frequencyUnit, lastDone, durationMinutes, lastSkipped }) =>
+        ({ id, name, room, frequency, frequencyUnit, lastDone, durationMinutes, lastSkipped })),
       vacations: state.vacations.map(({ id, start, end }) => ({ id, start, end })),
     };
   }
@@ -115,7 +140,7 @@
   function serializeBackup(state, now = new Date()) {
     return JSON.stringify({
       format: "casa-backup",
-      version: 2,
+      version: 3,
       exportedAt: now.toISOString(),
       data: snapshot(state),
     }, null, 2);
@@ -123,14 +148,14 @@
 
   function parseBackup(text) {
     const backup = JSON.parse(text);
-    if (!backup || backup.format !== "casa-backup" || ![1, 2].includes(backup.version) ||
+    if (!backup || backup.format !== "casa-backup" || ![1, 2, 3].includes(backup.version) ||
         typeof backup.exportedAt !== "string" || !Number.isFinite(Date.parse(backup.exportedAt))) {
       throw new Error("Ce fichier n’est pas une sauvegarde Casa compatible.");
     }
     return { exportedAt: backup.exportedAt, data: snapshot(backup.data) };
   }
 
-  const api = { DEFAULT_DURATION_MINUTES, dayNumber, today, isAway, elapsedDays, taskStatus, dailyMinutes, validateState, returnToday, serializeBackup, parseBackup };
+  const api = { DEFAULT_DURATION_MINUTES, FREQUENCY_LIMITS, dayNumber, today, isAway, elapsedDays, intervalDays, taskStatus, dailyMinutes, validateState, returnToday, serializeBackup, parseBackup };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else globalThis.CasaCore = Object.freeze(api);
 })();

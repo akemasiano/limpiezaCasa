@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const core = require("../core.js");
 const vacation = (start, end = null, id = "v1") => ({ id, start, end });
 const task = (lastDone = "2026-10-01", frequency = 7) => ({
-  id: "t1", name: "Aspirateur", room: "Salon", frequency, lastDone, durationMinutes: 15, lastSkipped: null,
+  id: "t1", name: "Aspirateur", room: "Salon", frequency, frequencyUnit: "days", lastDone, durationMinutes: 15, lastSkipped: null,
 });
 const state = (tasks = [task()], vacations = []) => ({ version: 1, tasks, vacations });
 
@@ -123,7 +123,7 @@ test("backup validation rejects malformed, foreign, future and damaged backups",
   const valid = JSON.parse(core.serializeBackup(state()));
   for (const invalid of [
     "{", "null", "[]", JSON.stringify(state()), JSON.stringify({ ...valid, format: "other" }),
-    JSON.stringify({ ...valid, version: 3 }),
+    JSON.stringify({ ...valid, version: 4 }),
     JSON.stringify({ ...valid, exportedAt: null }),
     JSON.stringify({ ...valid, exportedAt: "not a date" }),
     JSON.stringify({ ...valid, data: { ...state(), version: 2 } }),
@@ -143,7 +143,7 @@ test("backup only includes known fields, not arbitrary imported properties", () 
 });
 
 test("legacy tasks and backups receive 15 minutes without mutating their source", () => {
-  const { durationMinutes, lastSkipped, ...legacyTask } = task();
+  const { durationMinutes, lastSkipped, frequencyUnit, ...legacyTask } = task();
   const legacy = state([legacyTask]);
   const before = JSON.stringify(legacy);
   assert.deepEqual(core.validateState(legacy), state());
@@ -205,9 +205,93 @@ test("daily estimate sums all due rooms and excludes completed or skipped tasks"
   assert.equal(core.dailyMinutes([{ ...task(null, 1), lastSkipped: "2026-10-24", durationMinutes: 25 }], "2026-10-25", []), 25);
 });
 
-test("v2 backups preserve duration and skip dates and still accept v1 backups", () => {
+test("backups preserve duration and skip dates", () => {
   const original = state([{ ...task(), durationMinutes: 95, lastSkipped: "2026-10-24" }]);
   const backup = core.serializeBackup(original);
-  assert.equal(JSON.parse(backup).version, 2);
+  assert.equal(JSON.parse(backup).version, 3);
   assert.deepEqual(core.parseBackup(backup).data, original);
+});
+
+test("daily, custom days, weekly and custom weeks use presence days", () => {
+  for (const [unit, count, days] of [["days", 1, 1], ["days", 3, 3], ["weeks", 1, 7], ["weeks", 2, 14]]) {
+    const scheduled = { ...task("2026-10-01", count), frequencyUnit: unit };
+    assert.equal(core.intervalDays(scheduled, "2026-10-01"), days);
+    const dueDate = new Date(Date.UTC(2026, 9, 1 + days)).toISOString().slice(0, 10);
+    assert.equal(core.taskStatus(scheduled, dueDate, []).due, true);
+    assert.equal(core.taskStatus(scheduled, dueDate, [vacation("2026-10-01", "2026-10-02")]).remaining, 1);
+  }
+});
+
+test("calendar months clamp to month end without treating a month as 30 days", () => {
+  for (const [reference, months, days] of [
+    ["2026-01-31", 1, 28],
+    ["2024-01-31", 1, 29],
+    ["2026-01-31", 2, 59],
+    ["2026-03-31", 1, 30],
+    ["2026-04-30", 1, 30],
+    ["2026-12-31", 2, 59],
+    ["2024-02-29", 12, 365],
+  ]) {
+    const scheduled = { ...task(reference, months), frequencyUnit: "months" };
+    assert.equal(core.intervalDays(scheduled, reference), days);
+    const dueDate = new Date((core.dayNumber(reference) + days) * 86400000).toISOString().slice(0, 10);
+    const previousDate = new Date((core.dayNumber(reference) + days - 1) * 86400000).toISOString().slice(0, 10);
+    assert.equal(core.taskStatus(scheduled, previousDate, []).remaining, 1);
+    assert.equal(core.taskStatus(scheduled, dueDate, []).due, true);
+  }
+  assert.equal(core.taskStatus({ ...task(null, 1), frequencyUnit: "months" }, "2026-02-01", []).due, true);
+});
+
+test("calendar months postpone across overlapping and additional vacation intervals", () => {
+  const scheduled = { ...task("2026-01-31", 1), frequencyUnit: "months" };
+  const pauses = [
+    vacation("2026-02-10", "2026-02-15"),
+    vacation("2026-02-12", "2026-02-17", "v2"),
+    vacation("2026-03-01", "2026-03-03", "v3"),
+  ];
+  assert.equal(core.taskStatus(scheduled, "2026-03-08", pauses).remaining, 1);
+  assert.equal(core.taskStatus(scheduled, "2026-03-09", pauses).due, true);
+  assert.equal(core.taskStatus(scheduled, "2026-05-01", [vacation("2026-02-01")]).remaining, 27);
+});
+
+test("monthly skip uses the skipped date, and completion restarts the calendar interval", () => {
+  const skipped = { ...task("2026-01-31", 1), frequencyUnit: "months", lastSkipped: "2026-02-15" };
+  assert.equal(core.taskStatus(skipped, "2026-03-14", []).remaining, 1);
+  assert.equal(core.taskStatus(skipped, "2026-03-15", []).due, true);
+  assert.equal(core.dailyMinutes([skipped], "2026-02-28", []), 0);
+  assert.equal(core.dailyMinutes([skipped], "2026-03-15", []), 15);
+  const completed = { ...skipped, lastDone: "2026-02-28", lastSkipped: null };
+  assert.equal(core.taskStatus(completed, "2026-03-27", []).remaining, 1);
+  assert.equal(core.taskStatus(completed, "2026-03-28", []).due, true);
+});
+
+test("frequency units and limits are validated in storage and backups", () => {
+  for (const frequencyUnit of [null, "", "years", 7, {}, "toString", "constructor"]) {
+    assert.throws(() => core.validateState(state([{ ...task(), frequencyUnit }])));
+  }
+  for (const frequencyUnit of ["days", "weeks", "months"]) {
+    for (const frequency of [0, 1.5, "2", core.FREQUENCY_LIMITS[frequencyUnit] + 1]) {
+      const invalid = state([{ ...task(), frequency, frequencyUnit }]);
+      assert.throws(() => core.validateState(invalid));
+      assert.throws(() => core.serializeBackup(invalid));
+    }
+    assert.equal(core.validateState(state([{ ...task(), frequency: core.FREQUENCY_LIMITS[frequencyUnit], frequencyUnit }])).tasks[0].frequencyUnit, frequencyUnit);
+  }
+});
+
+test("v3 backups preserve calendar frequencies and legacy backups remain day-based", () => {
+  const original = state([
+    { ...task("2026-01-31", 2), frequencyUnit: "months" },
+    { ...task(null, 3), frequencyUnit: "weeks", id: "t2" },
+  ]);
+  assert.deepEqual(core.parseBackup(core.serializeBackup(original)).data, original);
+  for (const version of [1, 2]) {
+    const { frequencyUnit, ...legacy } = task("2026-01-31", 30);
+    const restored = core.parseBackup(JSON.stringify({
+      format: "casa-backup", version, exportedAt: "2026-10-24T08:00:00Z", data: state([legacy]),
+    })).data.tasks[0];
+    assert.equal(restored.frequencyUnit, "days");
+    assert.equal(restored.frequency, 30);
+    assert.equal(core.intervalDays(restored, "2026-02-01"), 30);
+  }
 });

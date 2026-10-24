@@ -79,6 +79,13 @@ function actionButton(text, className, action, label) {
   return button;
 }
 
+function frequencyLabel(task) {
+  const unit = task.frequencyUnit ?? "days";
+  if (unit === "months") return task.frequency === 1 ? "Chaque mois" : `Tous les ${task.frequency} mois`;
+  if (unit === "weeks") return task.frequency === 1 ? "Chaque semaine" : `Toutes les ${task.frequency} semaines`;
+  return task.frequency === 1 ? "Chaque jour" : `Tous les ${task.frequency} jours`;
+}
+
 function showView(focus = false) {
   const requested = location.hash.slice(1);
   const view = ["maison", "absences", "donnees"].includes(requested) ? requested : "maison";
@@ -167,13 +174,14 @@ function render() {
     card.append(makeElement("p", "last-done", lastDone));
     card.append(makeElement("p", "task-duration", `Durée estimée : ${task.durationMinutes} min`));
     if (skipped) card.append(makeElement("p", "hint", `Dernière occurrence ignorée : ${formatDate(task.lastSkipped)}`));
-    const schedule = elapsed === null ? `Tous les ${task.frequency} jours de présence`
-      : taskDue ? `${elapsed} jour${elapsed > 1 ? "s" : ""} de présence écoulé${elapsed > 1 ? "s" : ""} · fréquence ${task.frequency} j`
-        : `Dans ${remaining} jour${remaining > 1 ? "s" : ""} de présence · fréquence ${task.frequency} j`;
+    const frequency = frequencyLabel(task);
+    const schedule = elapsed === null ? frequency
+      : taskDue ? `${frequency} · ${elapsed} jour${elapsed > 1 ? "s" : ""} de présence écoulé${elapsed > 1 ? "s" : ""}`
+        : `${frequency} · dans ${remaining} jour${remaining > 1 ? "s" : ""} de présence`;
     card.append(makeElement("p", "hint", schedule));
     const progress = makeElement("div", "progress");
     const fill = makeElement("span");
-    fill.style.width = `${elapsed === null ? 100 : Math.min(100, elapsed / task.frequency * 100)}%`;
+    fill.style.width = `${elapsed === null ? 100 : Math.min(100, elapsed / core.intervalDays(task, date) * 100)}%`;
     progress.append(fill);
     progress.classList.toggle("due", taskDue);
     card.append(progress);
@@ -222,6 +230,51 @@ function render() {
   $("#add-examples").hidden = state.tasks.length !== 0;
 }
 
+const frequencyOptions = {
+  daily: { unit: "days", count: 1 },
+  days: { unit: "days" },
+  weekly: { unit: "weeks", count: 1 },
+  weeks: { unit: "weeks" },
+  monthly: { unit: "months", count: 1 },
+  months: { unit: "months" },
+};
+
+function selectedFrequency() {
+  const type = $("#task-form input[name=frequencyType]:checked").value;
+  const option = frequencyOptions[type];
+  return {
+    frequencyUnit: option.unit,
+    frequency: option.count ?? Number($("#task-frequency").value),
+    variable: option.count === undefined,
+  };
+}
+
+function updateFrequencyControls() {
+  const { frequencyUnit, frequency, variable } = selectedFrequency();
+  const input = $("#task-frequency");
+  $("#frequency-adjustment").hidden = !variable;
+  input.disabled = !variable;
+  input.max = core.FREQUENCY_LIMITS[frequencyUnit];
+  $("#frequency-quantity-label").textContent = `Nombre de ${{ days: "jours", weeks: "semaines", months: "mois" }[frequencyUnit]}`;
+  const valid = Number.isInteger(frequency) && frequency >= 1 && frequency <= Number(input.max);
+  $("#frequency-decrease").disabled = !valid || frequency <= 1;
+  $("#frequency-increase").disabled = !valid || frequency >= Number(input.max);
+}
+
+document.querySelectorAll("input[name=frequencyType]").forEach((input) => input.addEventListener("change", () => {
+  $("#task-frequency").value = 2;
+  updateFrequencyControls();
+}));
+$("#task-frequency").addEventListener("input", updateFrequencyControls);
+$("#frequency-decrease").addEventListener("click", () => {
+  $("#task-frequency").stepDown();
+  updateFrequencyControls();
+});
+$("#frequency-increase").addEventListener("click", () => {
+  $("#task-frequency").stepUp();
+  updateFrequencyControls();
+});
+
 function openTask(task = null) {
   editingId = task?.id ?? null;
   $("#task-form").reset();
@@ -229,7 +282,13 @@ function openTask(task = null) {
   $("#task-dialog-title").textContent = task ? "Modifier la tâche" : "Nouvelle tâche";
   $("#task-name").value = task?.name ?? "";
   $("#task-room").value = task?.room ?? "";
-  $("#task-frequency").value = task?.frequency ?? 7;
+  const unit = task?.frequencyUnit ?? "days";
+  const count = task?.frequency ?? 7;
+  const type = unit === "days" && count === 7 ? "weekly"
+    : count === 1 ? { days: "daily", weeks: "weekly", months: "monthly" }[unit] : unit;
+  $(`#task-form input[name=frequencyType][value="${type}"]`).checked = true;
+  $("#task-frequency").value = frequencyOptions[type].count === undefined ? count : 2;
+  updateFrequencyControls();
   $("#task-duration").value = task?.durationMinutes ?? core.DEFAULT_DURATION_MINUTES;
   $("#task-last-done").value = task?.lastDone ?? "";
   $("#task-last-done").max = core.today();
@@ -253,13 +312,18 @@ $("#task-form").addEventListener("submit", (event) => {
     return;
   }
   const previous = state.tasks.find((item) => item.id === editingId);
+  const { frequency, frequencyUnit } = selectedFrequency();
+  if (!Number.isInteger(frequency) || frequency < 1 || frequency > core.FREQUENCY_LIMITS[frequencyUnit]) {
+    notify("Indiquez une quantité entière dans les limites affichées pour cette fréquence.");
+    return;
+  }
   const durationMinutes = Number($("#task-duration").value);
   if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 1440) {
     notify("Indiquez une durée entière entre 1 et 1440 minutes.");
     return;
   }
   const task = {
-    id: editingId ?? crypto.randomUUID(), name, room, frequency: Number($("#task-frequency").value),
+    id: editingId ?? crypto.randomUUID(), name, room, frequency, frequencyUnit,
     lastDone, durationMinutes, lastSkipped: previous?.lastSkipped ?? null,
   };
   const tasks = editingId ? state.tasks.map((item) => item.id === editingId ? task : item) : [...state.tasks, task];

@@ -125,7 +125,26 @@
         <label>Que faut-il nettoyer ?<input id="task-name" name="name" required maxlength="100" placeholder="Passer l’aspirateur" autocomplete="off"></label>
         <label>Pièce<input id="task-room" name="room" required maxlength="60" list="room-suggestions" placeholder="Salon" autocomplete="off"></label>
         <datalist id="room-suggestions"></datalist>
-        <label>Tous les combien de jours de présence ?<input id="task-frequency" name="frequency" type="number" min="1" max="3650" step="1" value="7" required inputmode="numeric"></label>
+        <fieldset class="frequency-options">
+          <legend>Fréquence</legend>
+          <div class="frequency-grid">
+            <label><input type="radio" name="frequencyType" value="daily">Journalier</label>
+            <label><input type="radio" name="frequencyType" value="days">Chaque X jours</label>
+            <label><input type="radio" name="frequencyType" value="weekly" checked>Hebdomadaire</label>
+            <label><input type="radio" name="frequencyType" value="weeks">Chaque X semaines</label>
+            <label><input type="radio" name="frequencyType" value="monthly">Mensuel</label>
+            <label><input type="radio" name="frequencyType" value="months">Chaque X mois</label>
+          </div>
+        </fieldset>
+        <div id="frequency-adjustment" hidden>
+          <label for="task-frequency" id="frequency-quantity-label">Nombre de jours</label>
+          <div class="frequency-stepper">
+            <button type="button" class="secondary" id="frequency-decrease" aria-label="Diminuer la fréquence">−</button>
+            <input id="task-frequency" name="frequency" type="number" min="1" max="3650" step="1" value="2" required inputmode="numeric" disabled>
+            <button type="button" class="secondary" id="frequency-increase" aria-label="Augmenter la fréquence">+</button>
+          </div>
+        </div>
+        <p class="hint">Les jours et semaines comptent les jours de présence. Les mois sont calendaires, avec ajustement en fin de mois. Les absences repoussent les échéances.</p>
         <label>Durée estimée (minutes)<input id="task-duration" name="durationMinutes" type="number" min="1" max="1440" step="1" value="15" required inputmode="numeric"></label>
         <label>Dernier ménage <span class="label-hint">(facultatif)</span><input id="task-last-done" name="lastDone" type="date"></label>
         <p class="hint">Sans date ni occurrence ignorée, la tâche sera à faire dès maintenant. Les jours d’absence sont déduits automatiquement.</p>
