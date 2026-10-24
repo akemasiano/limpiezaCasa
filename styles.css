@@ -20,7 +20,7 @@ a { color: inherit; }
 .page { max-width: 1080px; margin: auto; padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
 .header, .section-heading, .welcome, footer, .dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 9px; font-size: 32px; font-weight: 800; letter-spacing: -1.8px; text-decoration: none; }
-.brand > span { color: #7852e8; font-size: 37px; }
+.brand > img { display: block; flex-shrink: 0; border-radius: 10px; }
 .badge { padding: 9px 14px; border: 1px solid #ded5ee; border-radius: 30px; font-size: 12px; color: #6f6086; }
 .welcome { padding: 54px 0 24px; align-items: flex-end; }
 .eyebrow { font-size: 10px; font-weight: 750; letter-spacing: 1.6px; color: #75618f; text-transform: uppercase; margin: 0 0 12px; }

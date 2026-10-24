@@ -105,6 +105,12 @@ Les fichiers de développement et de configuration ne sont pas publiés.
 Sur iPhone : ouvrir le site HTTPS dans Safari, puis **Partager > Sur l’écran
 d’accueil** (activer **Ouvrir comme app web** si proposé).
 Sur Android : utiliser **Installer l’application** dans le menu du navigateur.
+Le logo représente une maison blanche sur fond vert sombre. Le même dessin est
+utilisé dans l’en-tête, le favicon et les icônes d’installation iPhone et Android.
+Les icônes PNG sont déclinées en 180, 192 et 512 pixels à partir de `icons/icon.svg`,
+avec un fond opaque et une maison centrée dans la zone de sécurité du masque.
+Une icône déjà installée sur iPhone peut rester en cache au niveau du système,
+même après la mise à jour de l’application.
 Ouvrir l’application une première fois avec une connexion et attendre
 **Prête à fonctionner hors ligne** avant de passer en mode avion.
 Le cache et le stockage restent soumis aux politiques de conservation du

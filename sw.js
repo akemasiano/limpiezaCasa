@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_PREFIX = "hello-pwa-";
-const CACHE_NAME = `${CACHE_PREFIX}v6`;
+const CACHE_NAME = `${CACHE_PREFIX}v7`;
 const APP_FILES = [
   "./",
   "./index.html",
