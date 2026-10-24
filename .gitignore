@@ -1,0 +1,18 @@
+### IntelliJ IDEA ###
+.idea/
+*.iml
+out/
+
+### Node.js ###
+node_modules/
+coverage/
+*.log
+
+### GitHub Pages ###
+/_site/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store

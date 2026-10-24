@@ -26,9 +26,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version-file: ".nvmrc"
+      - name: Check JavaScript syntax
+        run: npm run check
       - name: Check cleaning and vacation calculations
-        run: node --test
+        run: npm test
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Prepare website
@@ -36,6 +38,11 @@ jobs:
           mkdir _site
           cp index.html styles.css core.js app.js sw.js manifest.webmanifest _site/
           cp -r icons _site/
+      - name: Version offline cache
+        env:
+          BUILD_ID: ${{ github.sha }}
+        run: |
+          node -e 'const fs = require("node:fs"); const file = "_site/sw.js"; fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/const CACHE_NAME = .*;/, "const CACHE_NAME = " + JSON.stringify("hello-pwa-" + process.env.BUILD_ID) + ";"));'
       - name: Upload website
         uses: actions/upload-pages-artifact@v3
         with:

@@ -79,10 +79,29 @@ function actionButton(text, className, action, label) {
   return button;
 }
 
+function showView(focus = false) {
+  const requested = location.hash.slice(1);
+  const view = ["maison", "absences", "donnees"].includes(requested) ? requested : "maison";
+  for (const section of document.querySelectorAll("[data-view]")) {
+    section.hidden = section.dataset.view !== view;
+  }
+  for (const link of document.querySelectorAll(".app-nav a")) {
+    if (link.hash === `#${view}`) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  if (focus) {
+    document.querySelector(`[data-view="${view}"] h1`).focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }
+}
+
+window.addEventListener("hashchange", () => showView(true));
+
 function render() {
   const date = core.today();
   renderedDate = date;
   const away = state.vacations.some((vacation) => core.isAway(vacation, date));
+  $("#home-away-status").hidden = !away;
   $("#today-label").textContent = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   $("#task-last-done").max = date;
   const tasks = state.tasks.map((task) => ({ task, ...core.taskStatus(task, date, state.vacations) }));
@@ -188,6 +207,7 @@ function openTask(task = null) {
 }
 
 $("#add-task").addEventListener("click", () => openTask());
+$("#mobile-add-task").addEventListener("click", () => openTask());
 $("#task-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const name = $("#task-name").value.trim();
@@ -205,6 +225,7 @@ $("#task-form").addEventListener("submit", (event) => {
   const tasks = editingId ? state.tasks.map((item) => item.id === editingId ? task : item) : [...state.tasks, task];
   if (save({ ...state, tasks })) {
     taskDialog.close();
+    location.hash = "maison";
     notify("Tâche enregistrée.");
   }
 });
@@ -397,14 +418,89 @@ window.addEventListener("storage", (event) => {
   }
 });
 
+let offlineRegistration = null;
+let reloadForUpdate = false;
+let updateActivated = false;
+
+function showUpdateNotice() {
+  $("#update-notice").hidden = false;
+  $("#offline-status").textContent = "Nouvelle version prête.";
+  $("#update-status").textContent = "Une nouvelle version est prête. Utilisez le bouton Mettre à jour.";
+}
+
+$("#apply-update").addEventListener("click", () => {
+  if (document.querySelector("dialog[open]") &&
+      !confirm("La mise à jour rechargera Casa. Les modifications du formulaire non enregistrées seront perdues. Continuer ?")) return;
+  if (updateActivated) {
+    location.reload();
+    return;
+  }
+  const worker = offlineRegistration?.waiting;
+  if (!worker) {
+    $("#update-message").textContent = "La mise à jour n’est plus disponible. Relancez la recherche dans Données.";
+    return;
+  }
+  reloadForUpdate = true;
+  worker.postMessage({ type: "SKIP_WAITING" });
+});
+
+async function checkForUpdate(manual = false) {
+  if (!offlineRegistration || $("#check-update").disabled) return;
+  const button = $("#check-update");
+  button.disabled = true;
+  try {
+    if (manual) $("#update-status").textContent = "Recherche d’une nouvelle version…";
+    if (!navigator.onLine) throw new Error("Aucune connexion disponible.");
+    await offlineRegistration.update();
+    if (offlineRegistration.waiting || updateActivated) showUpdateNotice();
+    else if (offlineRegistration.installing) $("#update-status").textContent = "Téléchargement de la mise à jour…";
+    else if (manual) $("#update-status").textContent = "Casa est à jour.";
+  } catch (error) {
+    console.error("Impossible de rechercher une mise à jour :", error);
+    $("#update-status").textContent = "Recherche impossible. Vérifiez votre connexion et réessayez.";
+    if (manual) notify("Recherche de mise à jour impossible. Vérifiez votre connexion.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("#check-update").addEventListener("click", () => checkForUpdate(true));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkForUpdate();
+});
+window.addEventListener("online", () => checkForUpdate());
+
 async function prepareOfflineMode() {
   const status = $("#offline-status");
   if (!("serviceWorker" in navigator) || !window.isSecureContext) {
     status.textContent = "Mode hors ligne indisponible : utilisez HTTPS ou localhost et un navigateur compatible.";
+    $("#update-status").textContent = "Mises à jour indisponibles : utilisez HTTPS ou localhost et un navigateur compatible.";
     return;
   }
+  let controlled = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!controlled) {
+      controlled = true;
+      return;
+    }
+    updateActivated = true;
+    if (reloadForUpdate) location.reload();
+    else showUpdateNotice();
+  });
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+    offlineRegistration = registration;
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && registration.active) showUpdateNotice();
+        else if (worker.state === "redundant") {
+          console.error("Installation de la version hors ligne échouée.");
+          $("#update-status").textContent = "Téléchargement de la version hors ligne échoué. Vérifiez votre connexion et réessayez.";
+        }
+      });
+    });
     if (!registration.active) {
       const worker = registration.installing || registration.waiting;
       if (!worker) throw new Error("Aucun service worker disponible.");
@@ -421,19 +517,19 @@ async function prepareOfflineMode() {
       });
     }
     await navigator.serviceWorker.ready;
-    status.textContent = registration.waiting ? "Mise à jour prête : fermez puis rouvrez l’application." : "Prête à fonctionner hors ligne";
-    registration.addEventListener("updatefound", () => {
-      const worker = registration.installing;
-      worker?.addEventListener("statechange", () => {
-        if (worker.state === "installed" && registration.active) status.textContent = "Mise à jour prête : fermez puis rouvrez l’application.";
-      });
-    });
+    status.textContent = "Prête à fonctionner hors ligne";
+    $("#update-status").textContent = "Les mises à jour sont recherchées à l’ouverture et au retour dans Casa.";
+    $("#check-update").disabled = false;
+    if (registration.waiting) showUpdateNotice();
+    await checkForUpdate();
   } catch (error) {
     console.error("Impossible de préparer le mode hors ligne :", error);
     status.textContent = "Mode hors ligne indisponible. Rechargez avec une connexion.";
+    $("#update-status").textContent = "Initialisation des mises à jour impossible. Rechargez avec une connexion.";
   }
 }
 
+showView();
 render();
 updateStoragePersistence();
 prepareOfflineMode();

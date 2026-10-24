@@ -20,6 +20,21 @@ du site supprime aussi le suivi. Un échec de lecture bloque les modifications
 pour ne pas écraser les données existantes ; un échec d’écriture est affiché
 et n’est jamais présenté comme un enregistrement réussi.
 
+## Interface sur téléphone
+
+Trois vues distinctes évitent de charger l’accueil : **Maison** affiche uniquement
+le résumé, les tâches et leurs filtres ; **Absences** regroupe les pauses et leur
+historique ; **Données** regroupe les sauvegardes, la restauration, la protection
+du stockage et l’aide à l’installation. Un rappel apparaît sur Maison pendant
+une absence active. La navigation conserve les données et les filtres ; les liens
+directs (`#maison`, `#absences`, `#donnees`) et le retour du navigateur fonctionnent.
+Sur téléphone, une barre en bas permet de changer de vue ou d’ajouter une tâche.
+Sur ordinateur, la navigation apparaît en haut. Les tâches s’affichent
+sur une seule colonne et les contrôles offrent une zone tactile d’au moins
+48 pixels. Les formulaires s’ouvrent en panneau bas défilable ; les champs
+restent à 16 pixels pour éviter le zoom automatique de saisie sur iPhone.
+L’interface tient compte des zones de sécurité de l’écran.
+
 ## Protéger ses données et changer d’iPhone
 
 La section **Protéger mes données** propose trois actions, sans compte :
@@ -83,7 +98,7 @@ fonctionne). Le workflow peut aussi être lancé manuellement depuis **Actions**
 
 Adresse attendue : `https://akemasiano.github.io/limpiezaCasa/`.
 Tous les chemins sont relatifs pour fonctionner dans ce sous-répertoire.
-Les fichiers Java et IntelliJ ne sont pas publiés.
+Les fichiers de développement et de configuration ne sont pas publiés.
 
 ## Installer et utiliser hors ligne
 
@@ -97,6 +112,13 @@ navigateur et du système.
 
 ## Développement
 
+Utiliser **Node.js 24 LTS**, également utilisé par le workflow GitHub Pages.
+La version est indiquée dans `.nvmrc` et `package.json`.
+Node.js sert aux tests et aux vérifications de développement : la PWA reste
+statique, sans serveur Node.js en production et sans dépendance externe.
+Les configurations locales IntelliJ (`.idea/`, `*.iml`) sont ignorées par Git ;
+aucun projet Java n’est nécessaire.
+
 Servir le dossier avec un serveur HTTP statique sur `localhost`, par exemple :
 
 ```sh
@@ -107,13 +129,24 @@ Ouvrir `http://localhost:8000`. Le service worker nécessite HTTPS ou localhost,
 pas une ouverture directe de `index.html` ni une adresse HTTP du réseau local.
 
 Les tests de calcul et de validation utilisent uniquement le runner intégré de
-Node.js (version 18 ou supérieure) :
+Node.js. Aucune installation de dépendances n’est nécessaire :
 
 ```sh
-node --test
+npm test
+npm run check
 ```
 
 Après toute modification des fichiers web, incrémenter `CACHE_NAME` dans `sw.js`.
-Après publication, ouvrir l’application en ligne pour télécharger la mise à jour,
-puis fermer toutes ses fenêtres et la rouvrir pour activer la nouvelle version.
-La mise à jour du cache ne supprime pas les données de ménage.
+Le déploiement GitHub Pages attribue aussi un nom de cache unique à chaque commit.
+Casa recherche une mise à jour à l’ouverture, au retour dans l’application et au
+retour de la connexion. Dans **Données**, **Rechercher une mise à jour** permet
+de lancer cette vérification manuellement. Les fichiers de la nouvelle version
+sont téléchargés sans réutiliser le cache HTTP.
+
+Lorsqu’une version est prête, **Mettre à jour** l’active et recharge Casa.
+Les autres fenêtres proposent un rechargement sans interrompre leurs formulaires.
+Les anciens caches de Casa sont supprimés à l’activation ; les tâches et absences
+dans le stockage local ne sont jamais effacées. Hors ligne ou en cas d’échec de
+téléchargement, la version déjà installée reste utilisable.
+Une ancienne version ne disposant pas encore de ces boutons doit être fermée
+dans toutes ses fenêtres puis rouverte une première fois après le déploiement.

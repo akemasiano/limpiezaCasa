@@ -19,29 +19,54 @@
   <body>
     <div class="page">
       <header class="header">
-        <a class="brand" href="./" aria-label="Casa, accueil"><span aria-hidden="true">✳</span> casa.</a>
+        <a class="brand" href="#maison" aria-label="Casa, accueil"><span aria-hidden="true">✳</span> casa.</a>
         <span class="badge">Votre maison, votre rythme</span>
       </header>
+      <nav class="app-nav" aria-label="Navigation principale">
+        <a href="#maison" aria-current="page">Maison</a>
+        <a href="#absences">Absences</a>
+        <a href="#donnees">Données</a>
+        <button type="button" class="primary" id="mobile-add-task" aria-label="Ajouter une tâche">+ Tâche</button>
+      </nav>
       <main>
         <div id="storage-error" class="notice error" role="alert" hidden></div>
-        <section class="welcome" aria-labelledby="title">
+        <div id="update-notice" class="notice update-notice" role="status" hidden>
+          <p id="update-message">Une nouvelle version de Casa est prête. Vos données seront conservées.</p>
+          <button type="button" class="primary" id="apply-update">Mettre à jour</button>
+        </div>
+        <section class="welcome" data-view="maison" aria-labelledby="title">
           <div>
             <p class="eyebrow" id="today-label"></p>
-            <h1 id="title">Un peu de ménage.<br><span>Beaucoup de sérénité.</span></h1>
-            <p class="intro">Une maison agréable, sans la charge mentale.</p>
+            <h1 id="title" tabindex="-1">Ma maison</h1>
+            <p id="home-away-status" class="notice" hidden>Mode vacances : les compteurs sont en pause. <a href="#absences">Gérer mon absence</a></p>
           </div>
           <button type="button" class="primary" id="add-task">+ Ajouter une tâche</button>
         </section>
-        <section class="stats" aria-label="Résumé du ménage">
+        <section class="stats" data-view="maison" aria-label="Résumé du ménage">
           <div><strong id="stat-due">0</strong><span>à faire</span></div>
           <div><strong id="stat-ok">0</strong><span>à jour</span></div>
           <div><strong id="stat-total">0</strong><span>tâches au total</span></div>
         </section>
-        <section class="vacation card" aria-labelledby="vacation-title">
+        <section id="maison" data-view="maison" class="tasks-section" aria-labelledby="tasks-title">
+          <div class="section-heading tasks-heading">
+            <h2 id="tasks-title">Mes tâches</h2>
+            <div class="filters">
+              <label><span class="sr-only">Filtrer par pièce</span><select id="room-filter"><option value="">Toutes les pièces</option></select></label>
+              <label><span class="sr-only">Filtrer les tâches</span><select id="status-filter"><option value="all">Toutes les tâches</option><option value="due">À faire</option><option value="ok">À jour</option></select></label>
+            </div>
+          </div>
+          <div id="task-list" class="task-list"></div>
+          <div id="empty-state" class="empty card" hidden>
+            <h3 id="empty-title">Bienvenue chez vous.</h3>
+            <p id="empty-text">Ajoutez votre première tâche ou démarrez avec quelques idées modifiables.</p>
+            <button type="button" class="secondary" id="add-examples">Ajouter des exemples</button>
+          </div>
+        </section>
+        <section id="absences" data-view="absences" class="vacation card" aria-labelledby="vacation-title" hidden>
           <div class="section-heading">
             <div>
               <p class="eyebrow">LE MÉNAGE AUSSI PREND DES VACANCES</p>
-              <h2 id="vacation-title">Vous partez ? Mettez sur pause.</h2>
+              <h1 id="vacation-title" class="view-title" tabindex="-1">Mes absences</h1>
               <p id="vacation-status">Les jours d’absence ne comptent pas dans vos fréquences.</p>
             </div>
             <span class="vacation-icon" aria-hidden="true">☀</span>
@@ -56,24 +81,9 @@
             <ul id="vacation-list" class="vacation-list"></ul>
           </details>
         </section>
-        <section class="tasks-section" aria-labelledby="tasks-title">
-          <div class="section-heading tasks-heading">
-            <h2 id="tasks-title">Ma maison</h2>
-            <div class="filters">
-              <label><span class="sr-only">Filtrer par pièce</span><select id="room-filter"><option value="">Toutes les pièces</option></select></label>
-              <label><span class="sr-only">Filtrer les tâches</span><select id="status-filter"><option value="all">Toutes les tâches</option><option value="due">À faire</option><option value="ok">À jour</option></select></label>
-            </div>
-          </div>
-          <div id="task-list" class="task-list"></div>
-          <div id="empty-state" class="empty card" hidden>
-            <h3 id="empty-title">Bienvenue chez vous.</h3>
-            <p id="empty-text">Ajoutez votre première tâche ou démarrez avec quelques idées modifiables.</p>
-            <button type="button" class="secondary" id="add-examples">Ajouter des exemples</button>
-          </div>
-        </section>
-        <section class="data-safety card" aria-labelledby="data-safety-title">
+        <section id="donnees" data-view="donnees" class="data-safety card" aria-labelledby="data-safety-title" hidden>
           <p class="eyebrow">GARDER UNE COPIE, GARDER L’ESPRIT LIBRE</p>
-          <h2 id="data-safety-title">Protéger mes données</h2>
+          <h1 id="data-safety-title" class="view-title" tabindex="-1">Protéger mes données</h1>
           <p>Sur iPhone, installez Casa sur l’écran d’accueil et ouvrez-la depuis son icône, hors navigation privée.</p>
           <p id="persistence-status" role="status">Vérification de la protection du stockage…</p>
           <button type="button" class="secondary" id="request-persistence" disabled>Protéger le stockage local</button>
@@ -86,8 +96,12 @@
           <p class="hint">Sur iPhone : dans le menu de partage, choisissez « Enregistrer dans Fichiers », puis iCloud Drive si souhaité.</p>
           <p class="hint">Le fichier contient toutes vos tâches, pièces, dates de ménage et absences. La restauration remplace les données actuelles après confirmation. Aucune synchronisation automatique.</p>
           <p id="backup-feedback" class="notice" role="status" hidden></p>
+          <h2 class="update-heading">Mises à jour de Casa</h2>
+          <p>Actualisez l’application sans supprimer vos tâches ni vos absences. Une connexion est nécessaire pour rechercher une nouvelle version.</p>
+          <button type="button" class="secondary" id="check-update" disabled>Rechercher une mise à jour</button>
+          <p id="update-status" role="status">Préparation de la vérification…</p>
         </section>
-        <aside class="install-note">
+        <aside class="install-note" data-view="donnees" hidden>
           <strong>Votre maison, même sans connexion.</strong>
           Sur iPhone : Safari → Partager → Sur l’écran d’accueil.
           Sur Android : menu du navigateur → Installer l’application.

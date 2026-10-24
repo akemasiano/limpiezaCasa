@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_PREFIX = "hello-pwa-";
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v6`;
 const APP_FILES = [
   "./",
   "./index.html",
@@ -17,8 +17,14 @@ const APP_FILES = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(APP_FILES.map((file) => new Request(file, { cache: "reload" })))
+    )
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
